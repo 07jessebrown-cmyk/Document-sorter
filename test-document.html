@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA Test Document - Complex Extraction Challenges</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Times+New+Roman:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .document {
+            background: white;
+            padding: 40px;
+            margin: 0 auto;
+            max-width: 800px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        
+        /* Challenge 1: Multi-language paragraph */
+        .multilang {
+            background: #fff3cd;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+        }
+        
+        /* Challenge 2: Visual noise simulation */
+        .noisy-text {
+            background: #f8f9fa;
+            padding: 20px;
+            border: 2px solid #dee2e6;
+            margin: 20px 0;
+            position: relative;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        
+        .noisy-text::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0,0,0,0.1) 1px, transparent 1px),
+                radial-gradient(circle at 80% 70%, rgba(0,0,0,0.1) 1px, transparent 1px),
+                linear-gradient(45deg, transparent 48%, rgba(0,0,0,0.05) 49%, rgba(0,0,0,0.05) 51%, transparent 52%);
+            pointer-events: none;
+        }
+        
+        /* Challenge 3: Complex table */
+        .complex-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 12px;
+        }
+        
+        .complex-table th,
+        .complex-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .complex-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        
+        .merged-cell {
+            background-color: #e9ecef;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .barcode {
+            width: 100px;
+            height: 30px;
+            background: repeating-linear-gradient(
+                90deg,
+                #000 0px,
+                #000 2px,
+                #fff 2px,
+                #fff 4px
+            );
+            margin: 5px auto;
+            display: block;
+        }
+        
+        /* Challenge 4: Special characters and symbols */
+        .special-chars {
+            background: #e7f3ff;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .math-equation {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            text-align: center;
+            font-family: 'Times New Roman', serif;
+            font-size: 16px;
+        }
+        
+        /* Challenge 5: Rotated text */
+        .rotated-header {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            transform: rotate(45deg);
+            font-size: 14px;
+            color: #6c757d;
+            font-weight: bold;
+        }
+        
+        .rotated-footer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            transform: rotate(135deg);
+            font-size: 12px;
+            color: #6c757d;
+            font-weight: bold;
+        }
+        
+        /* Challenge 6: Overlaid watermark */
+        .watermarked-section {
+            position: relative;
+            background: #fff;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 48px;
+            color: rgba(255, 0, 0, 0.1);
+            font-weight: bold;
+            z-index: 1;
+            pointer-events: none;
+        }
+        
+        .watermarked-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* Challenge 7: Handwritten signature simulation */
+        .signature {
+            font-family: 'Brush Script MT', cursive;
+            font-size: 24px;
+            color: #333;
+            transform: rotate(-5deg);
+            display: inline-block;
+            margin: 20px 0;
+            opacity: 0.8;
+        }
+        
+        /* Challenge 8: Empty spaces */
+        .empty-space {
+            height: 200px;
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .challenge-header {
+            background: #007bff;
+            color: white;
+            padding: 10px;
+            margin: 30px 0 10px 0;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="document">
+        <div class="rotated-header">CONFIDENTIAL</div>
+        <div class="rotated-footer">DRAFT</div>
+        
+        <h1>Quality Assurance Test Document</h1>
+        <p><strong>Document ID:</strong> QA-TEST-2024-001</p>
+        <p><strong>Date:</strong> January 15, 2024</p>
+        <p><strong>Purpose:</strong> Comprehensive testing of document extraction capabilities</p>
+        
+        <div class="challenge-header">Challenge 1: Multiple Languages in Single Paragraph</div>
+        <div class="multilang">
+            <p>This is a test document that contains multiple languages within a single paragraph. 
+            The text starts in English, then switches to Spanish: "Este es un documento de prueba que contiene múltiples idiomas." 
+            After the Spanish text, it continues in French: "Ceci est un document de test qui contient plusieurs langues." 
+            Finally, it returns to English to complete the sentence with technical terms like "machine learning" and "natural language processing" 
+            to test the system's ability to handle mixed-language content within the same paragraph.</p>
+        </div>
+        
+        <div class="challenge-header">Challenge 2: Visual Noise - Scanned Document Simulation</div>
+        <div class="noisy-text">
+            <p>This section simulates a scanned document with visual noise, faded text, and bleed-through effects. 
+            The text appears to be from an old book with smudged ink and paper degradation. 
+            Some words are partially obscured by stains and the reverse side text bleeding through. 
+            The document contains important information about financial transactions and client data that must be extracted accurately. 
+            Invoice number: INV-2024-001, Amount due: $1,247.50, Due date: March 15, 2024. 
+            Client: Acme Corporation, Address: 123 Business Street, Suite 456, New York, NY 10001. 
+            The text quality is intentionally poor to test OCR and text extraction robustness.</p>
+        </div>
+        
+        <div class="challenge-header">Challenge 3: Complex Table with Merged Cells and Special Content</div>
+        <table class="complex-table">
+            <thead>
+                <tr>
+                    <th class="merged-cell" colspan="3">Financial Summary Report</th>
+                    <th class="merged-cell" colspan="2">Q1 2024</th>
+                </tr>
+                <tr>
+                    <th>Item</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>001</td>
+                    <td>Professional Services</td>
+                    <td>40</td>
+                    <td>$125.00</td>
+                    <td>$5,000.00</td>
+                </tr>
+                <tr>
+                    <td>002</td>
+                    <td>Software License</td>
+                    <td>1</td>
+                    <td>€2,500.00</td>
+                    <td>€2,500.00</td>
+                </tr>
+                <tr>
+                    <td class="merged-cell" rowspan="2">003</td>
+                    <td>Consulting Hours</td>
+                    <td>25</td>
+                    <td>¥15,000</td>
+                    <td>¥375,000</td>
+                </tr>
+                <tr>
+                    <td>Travel Expenses</td>
+                    <td>5</td>
+                    <td>$200.00</td>
+                    <td>$1,000.00</td>
+                </tr>
+                <tr>
+                    <td>004</td>
+                    <td>Barcode Item</td>
+                    <td>1</td>
+                    <td>$99.99</td>
+                    <td>
+                        <div class="barcode"></div>
+                        $99.99
+                    </td>
+                </tr>
+                <tr>
+                    <td class="merged-cell" colspan="4">Subtotal</td>
+                    <td>$6,099.99</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="challenge-header">Challenge 4: Special Characters and Mathematical Symbols</div>
+        <div class="special-chars">
+            <h3>Special Character List:</h3>
+            <ul>
+                <li>◆ Diamond bullet point with important data</li>
+                <li>➤ Arrow bullet pointing to key information</li>
+                <li>★ Star bullet for critical items</li>
+                <li>● Circle bullet for standard items</li>
+                <li>▪ Square bullet for technical details</li>
+                <li>→ Right arrow for process flow</li>
+                <li>← Left arrow for reverse process</li>
+                <li>↑ Up arrow for priority items</li>
+                <li>↓ Down arrow for low priority</li>
+                <li>✓ Check mark for completed tasks</li>
+                <li>✗ Cross mark for failed items</li>
+                <li>⚠ Warning symbol for alerts</li>
+                <li>ℹ Information symbol for notes</li>
+            </ul>
+        </div>
+        
+        <div class="math-equation">
+            <h3>Mathematical Equation:</h3>
+            <p>∫₀^∞ e^(-x²) dx = √π/2</p>
+            <p>∑(n=1 to ∞) 1/n² = π²/6</p>
+            <p>α + β = γ where α = 45°, β = 30°, γ = 75°</p>
+            <p>f(x) = ax² + bx + c where a ≠ 0</p>
+        </div>
+        
+        <div class="challenge-header">Challenge 5: Rotated Text (Headers and Footers)</div>
+        <p>The rotated text appears in the top-right corner (45° rotation) and bottom-left corner (135° rotation) of this document. 
+        These elements test the system's ability to detect and extract text that is not in standard horizontal orientation.</p>
+        
+        <div class="challenge-header">Challenge 6: Overlaid Watermark Content</div>
+        <div class="watermarked-section">
+            <div class="watermark">FOR REVIEW ONLY</div>
+            <div class="watermarked-content">
+                <h3>Confidential Business Information</h3>
+                <p>This section contains sensitive business information that is overlaid with a semi-transparent watermark. 
+                The watermark text "FOR REVIEW ONLY" appears over the content, which may interfere with text extraction. 
+                Important details include: Project Alpha, Budget: $2.5M, Timeline: 6 months, 
+                Key Personnel: John Smith (Project Manager), Jane Doe (Technical Lead), 
+                Bob Johnson (Quality Assurance). The watermark should not prevent extraction of the underlying text content.</p>
+            </div>
+        </div>
+        
+        <div class="challenge-header">Challenge 7: Handwritten Signature</div>
+        <p>Authorized by:</p>
+        <div class="signature">
+            John A. Smith
+        </div>
+        <p>Date: January 15, 2024</p>
+        <p><em>Note: The signature above is simulated to appear handwritten and may be difficult to extract accurately.</em></p>
+        
+        <div class="challenge-header">Challenge 8: Intentional Empty Spaces</div>
+        <p>This section contains intentionally large empty spaces to test how the system handles documents with significant whitespace:</p>
+        
+        <div class="empty-space">
+            This space is intentionally left blank
+        </div>
+        
+        <p>Additional content continues after the empty space to ensure the system can resume text extraction after encountering large gaps.</p>
+        
+        <div class="empty-space">
+            Another intentionally empty section
+        </div>
+        
+        <h3>Document Conclusion</h3>
+        <p>This test document has been designed to challenge document extraction systems with various complex scenarios. 
+        The extraction system should be able to handle all the challenges presented above, including multi-language content, 
+        visual noise, complex tables, special characters, rotated text, watermarked content, handwritten elements, and empty spaces.</p>
+        
+        <p><strong>Expected Extraction Results:</strong></p>
+        <ul>
+            <li>Document Type: Test Document / QA Report</li>
+            <li>Client: Acme Corporation</li>
+            <li>Date: 2024-01-15</li>
+            <li>Amount: $6,099.99 (from table)</li>
+            <li>Title: Quality Assurance Test Document</li>
+        </ul>
+    </div>
+</body>
+</html>

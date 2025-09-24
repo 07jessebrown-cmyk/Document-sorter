@@ -1,0 +1,52 @@
+{
+  "ai": {
+    "enabled": false,
+    "model": "gpt-3.5-turbo",
+    "confidenceThreshold": 0.5,
+    "batchSize": 5,
+    "maxRetries": 3,
+    "retryDelay": 1000,
+    "maxDelay": 10000,
+    "timeout": 30000
+  },
+  "cache": {
+    "enabled": true,
+    "maxSize": 1000,
+    "maxAge": 604800000,
+    "compressionEnabled": true
+  },
+  "ui": {
+    "showAIToggle": true,
+    "showConfidenceBadges": true,
+    "showSourceLabels": true,
+    "highlightLowConfidence": true,
+    "lowConfidenceThreshold": 0.5
+  },
+  "processing": {
+    "enableAIFallback": true,
+    "aiFallbackThreshold": 0.3,
+    "concurrentProcessing": true,
+    "maxConcurrentFiles": 5
+  },
+  "extraction": {
+    "useOCR": false,
+    "useTableExtraction": false,
+    "useLLMEnhancer": true,
+    "useHandwritingDetection": false,
+    "ocrLanguage": "eng",
+    "ocrWorkerPoolSize": 2,
+    "tableTimeout": 30000,
+    "handwritingLanguage": "eng",
+    "handwritingWorkerPoolSize": 1
+  },
+  "telemetry": {
+    "enabled": true,
+    "logLevel": "info",
+    "trackAICalls": true,
+    "trackCacheStats": true,
+    "trackPerformance": true,
+    "retentionDays": 30,
+    "maxLogSize": 10485760,
+    "saveInterval": 60000
+  }
+}

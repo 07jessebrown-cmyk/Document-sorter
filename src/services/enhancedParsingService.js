@@ -1,0 +1,970 @@
+const ParsingService = require('./parsingService');
+const AITextService = require('./aiTextService');
+const LLMClient = require('./llmClient');
+const AICache = require('./aiCache');
+const ConfigService = require('./configService');
+const TableExtractorService = require('./tableExtractor');
+const OCRService = require('./ocrService');
+const LanguageService = require('./langService');
+const HandwritingService = require('./handwritingService');
+const { buildMetadataPrompt } = require('./ai_prompts');
+
+/**
+ * Enhanced Parsing Service with AI Integration
+ * 
+ * This service extends the base ParsingService with AI capabilities:
+ * - Runs regex + fuzzy matching first
+ * - Falls back to AI when confidence is low or data is missing
+ * - Provides confidence scoring for all methods
+ * - Supports batch processing with concurrency control
+ * - Caches AI responses to reduce API calls
+ */
+
+class EnhancedParsingService extends ParsingService {
+  constructor(options = {}) {
+    super();
+    
+    // Initialize configuration service
+    this.configService = new ConfigService();
+    
+    // AI Configuration - prioritize options over config over environment variables
+    this.useAI = options.useAI !== undefined 
+      ? options.useAI 
+      : (this.configService.get('ai.enabled') || process.env.USE_AI === 'true');
+    this.aiConfidenceThreshold = options.aiConfidenceThreshold !== undefined 
+      ? options.aiConfidenceThreshold 
+      : (this.configService.get('ai.confidenceThreshold') || parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) || 0.5);
+    this.aiBatchSize = options.aiBatchSize !== undefined 
+      ? options.aiBatchSize 
+      : (this.configService.get('ai.batchSize') || parseInt(process.env.AI_BATCH_SIZE) || 5);
+    this.aiTimeout = this.configService.get('ai.timeout') || parseInt(process.env.AI_TIMEOUT) || 30000; // 30 seconds
+    
+    // Extraction feature flags from config
+    this.extractionConfig = this.configService.getExtractionConfig();
+    this.useOCR = options.useOCR !== undefined ? options.useOCR : this.extractionConfig.useOCR;
+    this.useTableExtraction = options.useTableExtraction !== undefined ? options.useTableExtraction : this.extractionConfig.useTableExtraction;
+    this.useLLMEnhancer = options.useLLMEnhancer !== undefined ? options.useLLMEnhancer : this.extractionConfig.useLLMEnhancer;
+    this.useHandwritingDetection = options.useHandwritingDetection !== undefined ? options.useHandwritingDetection : this.extractionConfig.useHandwritingDetection;
+    
+    // Initialize AI services
+    this.aiTextService = null;
+    this.llmClient = null;
+    this.aiCache = null;
+    this.promptService = null;
+    
+    // Initialize table extractor if enabled
+    this.tableExtractor = null;
+    if (this.useTableExtraction) {
+      this.tableExtractor = new TableExtractorService({
+        debug: this.configService.get('debug', false),
+        timeout: this.configService.get('extraction.tableTimeout', 30000)
+      });
+    }
+    
+    // Initialize OCR service if enabled
+    this.ocrService = null;
+    if (this.useOCR) {
+      this.ocrService = new OCRService({
+        language: this.configService.get('extraction.ocrLanguage', 'eng'),
+        debug: this.configService.get('debug', false),
+        workerPoolSize: this.configService.get('extraction.ocrWorkerPoolSize', 2)
+      });
+    }
+    
+    // Initialize language detection service
+    this.languageService = new LanguageService({
+      debug: this.configService.get('debug', false),
+      minConfidence: this.configService.get('language.minConfidence', 0.1),
+      fallbackLanguage: this.configService.get('language.fallbackLanguage', 'eng')
+    });
+    
+    // Initialize handwriting service if enabled
+    this.handwritingService = null;
+    if (this.useHandwritingDetection) {
+      this.handwritingService = new HandwritingService({
+        language: this.configService.get('extraction.handwritingLanguage', 'eng'),
+        debug: this.configService.get('debug', false),
+        workerPoolSize: this.configService.get('extraction.handwritingWorkerPoolSize', 1)
+      });
+    }
+    
+    // Processing statistics
+    this.stats = {
+      totalProcessed: 0,
+      regexProcessed: 0,
+      aiProcessed: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      errors: 0,
+      averageConfidence: 0
+    };
+    
+    // Initialize AI services if enabled (but don't fail if initialization fails)
+    if (this.useAI) {
+      this.initializeAIServices().catch(error => {
+        console.warn('AI services initialization failed, but keeping useAI enabled:', error.message);
+      });
+    }
+  }
+
+  /**
+   * Enhanced text extraction with OCR fallback
+   * @param {string} filePath - Path to the file
+   * @returns {Promise<string>} Extracted text
+   */
+  async extractText(filePath) {
+    try {
+      // First try standard text extraction
+      const text = await super.extractText(filePath);
+      
+      // If text extraction returns empty or very short text, try OCR fallback
+      if (this.useOCR && this.ocrService && (!text || text.trim().length < 50)) {
+        console.log(`📷 PDF appears to be image-based, attempting OCR fallback for: ${filePath}`);
+        
+        try {
+          const ocrResult = await this.ocrService.extractText(filePath);
+          if (ocrResult.success && ocrResult.text && ocrResult.text.trim().length > 0) {
+            console.log(`📷 OCR extraction successful: ${ocrResult.text.length} characters`);
+            return ocrResult.text;
+          } else {
+            console.log(`📷 OCR extraction failed or returned empty text for: ${filePath}`);
+            return text; // Return original text (empty or short)
+          }
+        } catch (ocrError) {
+          console.warn(`📷 OCR fallback failed for ${filePath}:`, ocrError.message);
+          return text; // Return original text on OCR failure
+        }
+      }
+      
+      return text;
+    } catch (error) {
+      console.error(`Text extraction failed for ${filePath}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize AI services
+   * @returns {Promise<void>}
+   */
+  async initializeAIServices() {
+    try {
+      // Initialize LLM Client
+      this.llmClient = new LLMClient({
+        apiKey: process.env.OPENAI_API_KEY || process.env.AI_API_KEY,
+        baseURL: process.env.AI_BASE_URL,
+        defaultModel: process.env.AI_MODEL || 'gpt-3.5-turbo',
+        maxRetries: 3,
+        retryDelay: 1000,
+        timeout: this.aiTimeout
+      });
+
+      // Initialize AI Cache
+      this.aiCache = new AICache({
+        cacheDir: process.env.AI_CACHE_DIR,
+        maxCacheSize: parseInt(process.env.AI_CACHE_SIZE) || 1000,
+        maxAge: parseInt(process.env.AI_CACHE_AGE) || 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+
+      // Initialize AI Text Service
+      this.aiTextService = new AITextService();
+      this.aiTextService.setLLMClient(this.llmClient);
+      this.aiTextService.setCache(this.aiCache);
+
+      // Prompt service is now imported as functions
+
+      // Initialize cache
+      await this.aiCache.initialize();
+
+      console.log('✅ AI services initialized successfully');
+    } catch (error) {
+      console.warn('⚠️ Failed to initialize AI services:', error.message);
+      // Don't disable AI on initialization failure - let the caller decide
+    }
+  }
+
+  /**
+   * Enhanced document analysis with AI fallback
+   * @param {string} text - Document text
+   * @param {string} filePath - File path
+   * @param {Object} options - Analysis options
+   * @returns {Promise<Object>} Enhanced analysis result
+   */
+  async analyzeDocumentEnhanced(text, filePath, options = {}) {
+    this.stats.totalProcessed++;
+    
+    const result = {
+      date: undefined,
+      type: 'Unclassified',
+      name: undefined,
+      clientName: undefined,
+      amount: undefined,
+      title: undefined,
+      confidence: 0,
+      rawText: text,
+      filePath: filePath,
+      source: 'regex', // Track which method was used
+      aiConfidence: 0,
+      snippets: [],
+      tables: [] // Add tables array for table extraction results
+    };
+
+    if (!text || text.trim().length === 0) {
+      return result;
+    }
+
+    try {
+      // Step 1: Extract tables if enabled
+      let tableData = null;
+      if (this.useTableExtraction && this.tableExtractor) {
+        try {
+          console.log(`📊 Extracting tables from: ${filePath}`);
+          tableData = await this.extractTables(filePath, options);
+          if (tableData && tableData.success && tableData.tables.length > 0) {
+            result.tables = tableData.tables;
+            console.log(`📊 Found ${tableData.tables.length} tables in ${filePath}`);
+          }
+        } catch (tableError) {
+          console.warn(`Table extraction failed for ${filePath}:`, tableError.message);
+        }
+      }
+
+      // Step 1.5: Detect handwriting if enabled
+      let handwritingData = null;
+      if (this.useHandwritingDetection && this.handwritingService) {
+        try {
+          console.log(`✍️ Detecting handwriting in: ${filePath}`);
+          handwritingData = await this.detectHandwriting(filePath, options);
+          if (handwritingData && handwritingData.success) {
+            result.handwritingDetected = handwritingData.hasHandwriting;
+            result.handwritingType = handwritingData.handwritingType;
+            result.signatureDetected = handwritingData.signatureDetected;
+            result.manualReviewRequired = handwritingData.manualReviewRequired;
+            result.handwritingConfidence = handwritingData.confidence;
+            console.log(`✍️ Handwriting detection: ${handwritingData.handwritingType} (confidence: ${handwritingData.confidence})`);
+          }
+        } catch (handwritingError) {
+          console.warn(`Handwriting detection failed for ${filePath}:`, handwritingError.message);
+        }
+      }
+
+      // Step 2: Run traditional regex + fuzzy analysis
+      const regexResult = this.analyzeDocument(text, filePath);
+      
+      // Enhance with confidence scoring
+      const enhancedRegexResult = this.enhanceWithConfidence(regexResult, text);
+      
+      // Merge table data into result
+      if (tableData) {
+        enhancedRegexResult.tables = tableData.tables || [];
+        enhancedRegexResult.tableConfidence = tableData.confidence || 0;
+        enhancedRegexResult.tableMethod = tableData.method || 'none';
+      } else {
+        // Ensure tables array is always present
+        enhancedRegexResult.tables = [];
+        enhancedRegexResult.tableConfidence = 0;
+        enhancedRegexResult.tableMethod = 'none';
+      }
+      
+      // Check if we need AI fallback
+      const needsAI = this.shouldUseAI(enhancedRegexResult, options);
+      
+      if (needsAI && this.useAI) {
+        console.log(`🤖 Using AI fallback for: ${filePath}`);
+        this.stats.aiProcessed++;
+        
+        try {
+          // Detect language for AI processing
+          const languageInfo = await this.detectLanguage(text);
+          const aiOptions = {
+            ...options,
+            detectedLanguage: languageInfo.detectedLanguage,
+            languageName: languageInfo.languageName
+          };
+          
+          const aiResult = await this.processWithAI(text, filePath, aiOptions);
+          if (aiResult) {
+            // Merge AI results with regex results
+            const mergedResult = this.mergeResults(enhancedRegexResult, aiResult);
+            this.stats.averageConfidence = this.updateAverageConfidence(mergedResult.confidence);
+            return mergedResult;
+          }
+        } catch (aiError) {
+          console.warn(`AI processing failed for ${filePath}:`, aiError.message);
+          this.stats.errors++;
+        }
+      }
+      
+      // Use regex results
+      this.stats.regexProcessed++;
+      this.stats.averageConfidence = this.updateAverageConfidence(enhancedRegexResult.confidence);
+      return enhancedRegexResult;
+      
+    } catch (error) {
+      console.error(`Analysis failed for ${filePath}:`, error);
+      this.stats.errors++;
+      result.error = error.message;
+      return result;
+    }
+  }
+
+  /**
+   * Detect language of the given text
+   * @param {string} text - Text to analyze
+   * @returns {Promise<Object>} Language detection result
+   */
+  async detectLanguage(text) {
+    if (!text || text.trim().length === 0) {
+      return {
+        detectedLanguage: 'eng',
+        languageName: 'English',
+        confidence: 0,
+        success: false
+      };
+    }
+
+    try {
+      const result = await this.languageService.detectLanguage(text);
+      return {
+        detectedLanguage: result.detectedLanguage || 'eng',
+        languageName: result.languageName || 'English',
+        confidence: result.confidence || 0,
+        success: result.success || false
+      };
+    } catch (error) {
+      console.warn('Language detection failed:', error.message);
+      return {
+        detectedLanguage: 'eng',
+        languageName: 'English',
+        confidence: 0,
+        success: false
+      };
+    }
+  }
+
+  /**
+   * Extract tables from PDF file
+   * @param {string} filePath - Path to PDF file
+   * @param {Object} options - Extraction options
+   * @returns {Promise<Object>} Table extraction result
+   */
+  async extractTables(filePath, options = {}) {
+    if (!this.tableExtractor) {
+      return {
+        success: false,
+        tables: [],
+        confidence: 0,
+        method: 'none',
+        errors: ['Table extraction not enabled']
+      };
+    }
+
+    try {
+      const result = await this.tableExtractor.extractTables(filePath, options);
+      return result;
+    } catch (error) {
+      console.error(`Table extraction failed for ${filePath}:`, error);
+      return {
+        success: false,
+        tables: [],
+        confidence: 0,
+        method: 'error',
+        errors: [error.message]
+      };
+    }
+  }
+
+  /**
+   * Detect handwriting in file
+   * @param {string} filePath - Path to file
+   * @param {Object} options - Detection options
+   * @returns {Promise<Object>} Handwriting detection result
+   */
+  async detectHandwriting(filePath, options = {}) {
+    if (!this.handwritingService) {
+      return {
+        success: false,
+        hasHandwriting: false,
+        handwritingType: 'none',
+        confidence: 0,
+        method: 'none',
+        errors: ['Handwriting detection not enabled']
+      };
+    }
+
+    try {
+      const result = await this.handwritingService.detectHandwriting(filePath, options);
+      return result;
+    } catch (error) {
+      console.error(`Handwriting detection failed for ${filePath}:`, error);
+      return {
+        success: false,
+        hasHandwriting: false,
+        handwritingType: 'none',
+        confidence: 0,
+        method: 'error',
+        errors: [error.message]
+      };
+    }
+  }
+
+  /**
+   * Enhance regex results with confidence scoring
+   * @param {Object} result - Regex analysis result
+   * @param {string} text - Original text
+   * @returns {Object} Enhanced result with confidence scores
+   */
+  enhanceWithConfidence(result, text) {
+    const enhanced = { ...result };
+    
+    // Calculate confidence for each field
+    enhanced.clientConfidence = this.calculateClientConfidence(result.clientName, text);
+    enhanced.dateConfidence = this.calculateDateConfidence(result.date, text);
+    enhanced.docTypeConfidence = this.calculateDocTypeConfidence(result.type, text);
+    
+    // Overall confidence is the average of individual confidences
+    const confidences = [
+      enhanced.clientConfidence,
+      enhanced.dateConfidence,
+      enhanced.docTypeConfidence
+    ].filter(c => c > 0);
+    
+    enhanced.confidence = confidences.length > 0 
+      ? confidences.reduce((a, b) => a + b, 0) / confidences.length 
+      : 0;
+    
+    enhanced.source = 'regex';
+    return enhanced;
+  }
+
+  /**
+   * Calculate confidence for client name extraction
+   * @param {string} clientName - Extracted client name
+   * @param {string} text - Original text
+   * @returns {number} Confidence score (0-1)
+   */
+  calculateClientConfidence(clientName, text) {
+    if (!clientName) return 0;
+    
+    // Check if client name appears in multiple contexts
+    const contexts = [
+      'bill to', 'billed to', 'invoice to', 'to:',
+      'from', 'vendor', 'supplier', 'company',
+      'customer', 'account holder', 'payee'
+    ];
+    
+    let contextMatches = 0;
+    for (const context of contexts) {
+      if (text.toLowerCase().includes(context.toLowerCase())) {
+        contextMatches++;
+      }
+    }
+    
+    // Base confidence on context matches and name length
+    const baseConfidence = Math.min(contextMatches / 3, 1);
+    const lengthConfidence = Math.min(clientName.length / 20, 1);
+    
+    return (baseConfidence + lengthConfidence) / 2;
+  }
+
+  /**
+   * Calculate confidence for date extraction
+   * @param {string} date - Extracted date
+   * @param {string} text - Original text
+   * @returns {number} Confidence score (0-1)
+   */
+  calculateDateConfidence(date, text) {
+    if (!date) return 0;
+    
+    // Check if date appears in multiple formats or contexts
+    const dateContexts = [
+      'date', 'issued', 'created', 'generated', 'printed',
+      'due', 'expires', 'valid', 'effective'
+    ];
+    
+    let contextMatches = 0;
+    for (const context of dateContexts) {
+      if (text.toLowerCase().includes(context.toLowerCase())) {
+        contextMatches++;
+      }
+    }
+    
+    // Base confidence on context matches
+    const baseConfidence = Math.min(contextMatches / 2, 1);
+    
+    // Additional confidence if date is in YYYY-MM-DD format
+    const formatConfidence = /^\d{4}-\d{2}-\d{2}$/.test(date) ? 0.2 : 0;
+    
+    return Math.min(baseConfidence + formatConfidence, 1);
+  }
+
+  /**
+   * Calculate confidence for document type detection
+   * @param {string} docType - Detected document type
+   * @param {string} text - Original text
+   * @returns {number} Confidence score (0-1)
+   */
+  calculateDocTypeConfidence(docType, text) {
+    if (!docType || docType === 'Unclassified') return 0;
+    
+    const keywords = this.documentTypeKeywords[docType] || [];
+    if (keywords.length === 0) return 0;
+    
+    let totalMatches = 0;
+    for (const keyword of keywords) {
+      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      const matches = (text.match(regex) || []).length;
+      totalMatches += matches;
+    }
+    
+    // Confidence based on keyword matches
+    const baseConfidence = Math.min(totalMatches / 5, 1);
+    
+    // Additional confidence if type appears in header
+    const headerConfidence = this.checkHeaderPresence(docType, text) ? 0.2 : 0;
+    
+    return Math.min(baseConfidence + headerConfidence, 1);
+  }
+
+  /**
+   * Check if document type appears in header
+   * @param {string} docType - Document type
+   * @param {string} text - Original text
+   * @returns {boolean} True if found in header
+   */
+  checkHeaderPresence(docType, text) {
+    const lines = text.split('\n').slice(0, 10); // First 10 lines
+    const headerText = lines.join(' ').toLowerCase();
+    
+    const keywords = this.documentTypeKeywords[docType] || [];
+    for (const keyword of keywords) {
+      if (headerText.includes(keyword.toLowerCase())) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Determine if AI fallback should be used
+   * @param {Object} result - Regex analysis result
+   * @param {Object} options - Analysis options
+   * @returns {boolean} True if AI should be used
+   */
+  shouldUseAI(result, options) {
+    // Force AI if explicitly requested
+    if (options.forceAI) return true;
+    
+    // Use AI if confidence is below threshold
+    if (result.confidence < this.aiConfidenceThreshold) return true;
+    
+    // Use AI if critical fields are missing
+    const missingFields = [];
+    if (!result.clientName) missingFields.push('clientName');
+    if (!result.date) missingFields.push('date');
+    if (result.type === 'Unclassified') missingFields.push('type');
+    
+    // Use AI if more than one critical field is missing
+    if (missingFields.length > 1) return true;
+    
+    // Use AI if confidence is low and at least one field is missing
+    if (result.confidence < 0.7 && missingFields.length > 0) return true;
+    
+    return false;
+  }
+
+  /**
+   * Process document with AI
+   * @param {string} text - Document text
+   * @param {string} filePath - File path
+   * @param {Object} options - Processing options
+   * @returns {Promise<Object|null>} AI analysis result
+   */
+  async processWithAI(text, filePath, options = {}) {
+    if (!this.aiTextService) {
+      throw new Error('AI service not initialized');
+    }
+
+    try {
+      // Check cache first
+      const cacheKey = this.aiCache.generateHash(text);
+      const cachedResult = await this.aiCache.get(cacheKey);
+      
+      if (cachedResult) {
+        this.stats.cacheHits++;
+        console.log(`📦 Cache hit for: ${filePath}`);
+        return this.formatAIResult(cachedResult, 'ai-cached');
+      }
+      
+      this.stats.cacheMisses++;
+      
+      // Process with AI
+      const aiResult = await this.aiTextService.extractMetadataAI(text, {
+        model: options.model,
+        temperature: options.temperature || 0.1,
+        maxTokens: options.maxTokens || 500,
+        detectedLanguage: options.detectedLanguage,
+        languageName: options.languageName
+      });
+      
+      if (aiResult) {
+        // Cache the result
+        await this.aiCache.set(cacheKey, aiResult);
+        return this.formatAIResult(aiResult, 'ai');
+      }
+      
+      return null;
+    } catch (error) {
+      console.error(`AI processing failed for ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Format AI result to match expected structure
+   * @param {Object} aiResult - AI service result
+   * @param {string} source - Source identifier
+   * @returns {Object} Formatted result
+   */
+  formatAIResult(aiResult, source) {
+    return {
+      clientName: aiResult.clientName,
+      clientConfidence: aiResult.clientConfidence || 0,
+      date: aiResult.date,
+      dateConfidence: aiResult.dateConfidence || 0,
+      type: aiResult.docType || 'Unclassified',
+      docTypeConfidence: aiResult.docTypeConfidence || 0,
+      confidence: (aiResult.clientConfidence + aiResult.dateConfidence + aiResult.docTypeConfidence) / 3,
+      source: source,
+      aiConfidence: aiResult.confidence || 0,
+      snippets: aiResult.snippets || [],
+      amount: aiResult.amount,
+      title: aiResult.title
+    };
+  }
+
+  /**
+   * Merge regex and AI results
+   * @param {Object} regexResult - Regex analysis result
+   * @param {Object} aiResult - AI analysis result
+   * @returns {Object} Merged result
+   */
+  mergeResults(regexResult, aiResult) {
+    const merged = { ...regexResult };
+    
+    // Use AI results for missing or low-confidence fields
+    if (!merged.clientName || merged.clientConfidence < aiResult.clientConfidence) {
+      merged.clientName = aiResult.clientName;
+      merged.clientConfidence = aiResult.clientConfidence;
+    }
+    
+    if (!merged.date || merged.dateConfidence < aiResult.dateConfidence) {
+      merged.date = aiResult.date;
+      merged.dateConfidence = aiResult.dateConfidence;
+    }
+    
+    if (merged.type === 'Unclassified' || merged.docTypeConfidence < aiResult.docTypeConfidence) {
+      merged.type = aiResult.type;
+      merged.docTypeConfidence = aiResult.docTypeConfidence;
+    }
+    
+    // Preserve table data from regex result (if any)
+    if (regexResult.tables) {
+      merged.tables = regexResult.tables;
+      merged.tableConfidence = regexResult.tableConfidence;
+      merged.tableMethod = regexResult.tableMethod;
+    }
+    
+    // Update overall confidence
+    const confidences = [
+      merged.clientConfidence,
+      merged.dateConfidence,
+      merged.docTypeConfidence
+    ].filter(c => c > 0);
+    
+    merged.confidence = confidences.length > 0 
+      ? confidences.reduce((a, b) => a + b, 0) / confidences.length 
+      : 0;
+    
+    // Update source to indicate hybrid approach
+    merged.source = 'hybrid';
+    
+    // Add AI-specific fields
+    merged.aiConfidence = aiResult.aiConfidence;
+    merged.snippets = aiResult.snippets;
+    
+    return merged;
+  }
+
+  /**
+   * Process multiple documents in batch
+   * @param {Array} documents - Array of document objects
+   * @param {Object} options - Processing options
+   * @returns {Promise<Array>} Array of analysis results
+   */
+  async processBatch(documents, options = {}) {
+    const results = new Array(documents.length);
+    const aiCandidates = [];
+    
+    // Update total processed count
+    this.stats.totalProcessed += documents.length;
+    
+    // First pass: process with enhanced analysis (includes table extraction)
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i];
+      const enhancedResult = await this.analyzeDocumentEnhanced(doc.text, doc.filePath, options);
+      
+      if (this.shouldUseAI(enhancedResult, options)) {
+        aiCandidates.push({ index: i, doc, result: enhancedResult });
+      } else {
+        results[i] = enhancedResult;
+        this.stats.regexProcessed++;
+      }
+    }
+    
+    // Second pass: process AI candidates
+    if (aiCandidates.length > 0 && this.useAI) {
+      console.log(`🤖 Processing ${aiCandidates.length} documents with AI`);
+      
+      // Process in batches to respect concurrency limits
+      for (let i = 0; i < aiCandidates.length; i += this.aiBatchSize) {
+        const batch = aiCandidates.slice(i, i + this.aiBatchSize);
+        const batchPromises = batch.map(async ({ index, doc, result }) => {
+          try {
+            // Detect language for AI processing
+            const languageInfo = await this.detectLanguage(doc.text);
+            const aiOptions = {
+              ...options,
+              detectedLanguage: languageInfo.detectedLanguage,
+              languageName: languageInfo.languageName
+            };
+            
+            const aiResult = await this.processWithAI(doc.text, doc.filePath, aiOptions);
+            if (aiResult) {
+              results[index] = this.mergeResults(result, aiResult);
+              this.stats.aiProcessed++;
+            } else {
+              results[index] = result;
+              this.stats.regexProcessed++;
+            }
+          } catch (error) {
+            console.warn(`AI processing failed for ${doc.filePath}:`, error.message);
+            results[index] = result;
+            this.stats.regexProcessed++;
+          }
+        });
+        
+        await Promise.all(batchPromises);
+      }
+    }
+    
+    // Ensure all documents have results
+    for (let i = 0; i < documents.length; i++) {
+      if (!results[i]) {
+        // Fallback to enhanced analysis if no result
+        const doc = documents[i];
+        results[i] = await this.analyzeDocumentEnhanced(doc.text, doc.filePath, options);
+        this.stats.regexProcessed++;
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Update average confidence statistic
+   * @param {number} confidence - New confidence value
+   * @returns {number} Updated average confidence
+   */
+  updateAverageConfidence(confidence) {
+    const total = this.stats.totalProcessed;
+    if (total === 0) return 0;
+    
+    const current = this.stats.averageConfidence;
+    const newAverage = ((current * (total - 1)) + confidence) / total;
+    this.stats.averageConfidence = newAverage;
+    return newAverage;
+  }
+
+  /**
+   * Get processing statistics
+   * @returns {Object} Processing statistics
+   */
+  getStats() {
+    return {
+      ...this.stats,
+      aiEnabled: this.useAI,
+      aiThreshold: this.aiConfidenceThreshold,
+      aiBatchSize: this.aiBatchSize,
+      cacheStats: this.aiCache ? this.aiCache.getStats() : null,
+      extractionConfig: this.extractionConfig
+    };
+  }
+
+  /**
+   * Get extraction configuration
+   * @returns {Object} Extraction configuration
+   */
+  getExtractionConfig() {
+    return { ...this.extractionConfig };
+  }
+
+  /**
+   * Update extraction configuration
+   * @param {Object} config - New extraction configuration
+   */
+  updateExtractionConfig(config) {
+    if (config.useOCR !== undefined) {
+      this.useOCR = config.useOCR;
+      this.configService.set('extraction.useOCR', config.useOCR);
+      
+      // Reinitialize OCR service if needed
+      if (this.useOCR && !this.ocrService) {
+        this.ocrService = new OCRService({
+          language: this.configService.get('extraction.ocrLanguage', 'eng'),
+          debug: this.configService.get('debug', false),
+          workerPoolSize: this.configService.get('extraction.ocrWorkerPoolSize', 2)
+        });
+      } else if (!this.useOCR && this.ocrService) {
+        // Terminate OCR service if disabling
+        this.ocrService.terminate().catch(error => {
+          console.warn('Error terminating OCR service:', error.message);
+        });
+        this.ocrService = null;
+      }
+    }
+    if (config.useTableExtraction !== undefined) {
+      this.useTableExtraction = config.useTableExtraction;
+      this.configService.set('extraction.useTableExtraction', config.useTableExtraction);
+      
+      // Reinitialize table extractor if needed
+      if (this.useTableExtraction && !this.tableExtractor) {
+        this.tableExtractor = new TableExtractorService({
+          debug: this.configService.get('debug', false),
+          timeout: this.configService.get('extraction.tableTimeout', 30000)
+        });
+      } else if (!this.useTableExtraction && this.tableExtractor) {
+        this.tableExtractor = null;
+      }
+    }
+    if (config.useLLMEnhancer !== undefined) {
+      this.useLLMEnhancer = config.useLLMEnhancer;
+      this.configService.set('extraction.useLLMEnhancer', config.useLLMEnhancer);
+    }
+    if (config.useHandwritingDetection !== undefined) {
+      this.useHandwritingDetection = config.useHandwritingDetection;
+      this.configService.set('extraction.useHandwritingDetection', config.useHandwritingDetection);
+      
+      // Reinitialize handwriting service if needed
+      if (this.useHandwritingDetection && !this.handwritingService) {
+        this.handwritingService = new HandwritingService({
+          language: this.configService.get('extraction.handwritingLanguage', 'eng'),
+          debug: this.configService.get('debug', false),
+          workerPoolSize: this.configService.get('extraction.handwritingWorkerPoolSize', 1)
+        });
+      } else if (!this.useHandwritingDetection && this.handwritingService) {
+        // Terminate handwriting service if disabling
+        this.handwritingService.terminate().catch(error => {
+          console.warn('Error terminating handwriting service:', error.message);
+        });
+        this.handwritingService = null;
+      }
+    }
+    
+    // Update local config object
+    this.extractionConfig = this.configService.getExtractionConfig();
+  }
+
+  /**
+   * Save configuration to file
+   * @returns {Promise<boolean>} Success status
+   */
+  async saveConfig() {
+    return await this.configService.save();
+  }
+
+  /**
+   * Reset statistics
+   */
+  resetStats() {
+    this.stats = {
+      totalProcessed: 0,
+      regexProcessed: 0,
+      aiProcessed: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      errors: 0,
+      averageConfidence: 0
+    };
+  }
+
+  /**
+   * Close AI services
+   * @returns {Promise<void>}
+   */
+  async close() {
+    if (this.aiCache) {
+      await this.aiCache.close();
+    }
+    
+    if (this.ocrService) {
+      await this.ocrService.terminate();
+    }
+  }
+
+  /**
+   * Shutdown method for test cleanup
+   * @returns {Promise<void>}
+   */
+  async shutdown() {
+    try {
+      // Close AI services
+      await this.close();
+      
+      // Close language service
+      if (this.languageService) {
+        await this.languageService.close();
+        this.languageService = null;
+      }
+      
+      // Close handwriting service
+      if (this.handwritingService) {
+        await this.handwritingService.terminate();
+        this.handwritingService = null;
+      }
+      
+      // Clear any potential timers (defensive programming)
+      if (this._timers) {
+        this._timers.forEach(timer => clearTimeout(timer));
+        this._timers = [];
+      }
+      
+      // Reset AI service references
+      this.aiTextService = null;
+      this.llmClient = null;
+      this.aiCache = null;
+      this.promptService = null;
+      this.ocrService = null;
+      
+      // Reset statistics
+      this.stats = {
+        totalProcessed: 0,
+        regexProcessed: 0,
+        aiProcessed: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+        errors: 0,
+        averageConfidence: 0
+      };
+      
+      // Reset configuration
+      this.useAI = false;
+      
+    } catch (error) {
+      console.warn('Error during EnhancedParsingService shutdown:', error.message);
+    }
+  }
+}
+
+module.exports = EnhancedParsingService;

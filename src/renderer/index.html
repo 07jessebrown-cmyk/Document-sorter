@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Sorter v1.0.0</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Document Sorter</h1>
+            <p class="version">v1.1 (AI Enhanced)</p>
+            <p>Drag and drop your files to get started</p>
+        </header>
+        
+        <main>
+            <div class="controls">
+                <button id="browseBtn" class="btn">Browse</button>
+                <button id="startSortingBtn" class="btn primary">Start Sorting</button>
+                <button id="settingsBtn" class="btn">Settings</button>
+                <input id="fileInput" type="file" multiple style="display:none" />
+            </div>
+
+            <div id="dropZone" class="drop-zone">
+                <div class="drop-zone-content">
+                    <div class="drop-icon">📁</div>
+                    <h2>Drag and drop files here</h2>
+                    <p>Or click to browse files</p>
+                </div>
+            </div>
+            
+            <div id="fileList" class="file-list" style="display: none;">
+                <h3>Files to Process:</h3>
+                <ul id="fileListItems"></ul>
+            </div>
+            
+            <div id="previewTable" class="preview-table" style="display: none;">
+                <h3>Preview & Metadata:</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Original Filename</th>
+                                <th>Client</th>
+                                <th>Date</th>
+                                <th>Document Type</th>
+                                <th>Source</th>
+                                <th>Confidence</th>
+                                <th>Tables</th>
+                                <th>Snippets</th>
+                                <th>Proposed Filename</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div id="status" class="status"></div>
+        </main>
+        
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-tabs">
+                    <button class="tab-button active" data-tab="settings">Settings</button>
+                    <button class="tab-button" data-tab="diagnostics">Diagnostics</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Settings Tab -->
+                    <div id="settingsTab" class="tab-content active">
+                        <div class="setting-group">
+                            <label class="setting-label">
+                                <input type="checkbox" id="useAIToggle" />
+                                <span class="checkmark"></span>
+                                Enable AI Processing
+                            </label>
+                            <p class="setting-description">Use AI to enhance document analysis when regex/fuzzy matching has low confidence</p>
+                        </div>
+                    
+                    <div class="setting-group">
+                        <label for="aiConfidenceThreshold" class="setting-label">AI Confidence Threshold:</label>
+                        <input type="range" id="aiConfidenceThreshold" min="0" max="1" step="0.1" value="0.5" />
+                        <span id="confidenceValue">50%</span>
+                        <p class="setting-description">Minimum confidence required before using AI fallback</p>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label for="aiModel" class="setting-label">AI Model:</label>
+                        <select id="aiModel">
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        </select>
+                        <p class="setting-description">Select the AI model for document analysis</p>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <h3>Text Extraction Features</h3>
+                        <div class="extraction-settings">
+                            <label class="setting-label">
+                                <input type="checkbox" id="useOCRToggle" />
+                                <span class="checkmark"></span>
+                                Enable OCR Fallback
+                            </label>
+                            <p class="setting-description">Use OCR when PDF text extraction returns empty results</p>
+                            
+                            <label class="setting-label">
+                                <input type="checkbox" id="useTableExtractionToggle" />
+                                <span class="checkmark"></span>
+                                Enable Table Extraction
+                            </label>
+                            <p class="setting-description">Extract and preserve table structures from documents</p>
+                            
+                            <label class="setting-label">
+                                <input type="checkbox" id="useLLMEnhancerToggle" />
+                                <span class="checkmark"></span>
+                                Enable LLM Enhancement
+                            </label>
+                            <p class="setting-description">Use AI to enhance and improve text extraction results</p>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <h3>Processing Statistics</h3>
+                        <div id="processingStats" class="stats-container">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Processed:</span>
+                                <span class="stat-value" id="totalProcessed">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Regex Processed:</span>
+                                <span class="stat-value" id="regexProcessed">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">AI Processed:</span>
+                                <span class="stat-value" id="aiProcessed">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Cache Hits:</span>
+                                <span class="stat-value" id="cacheHits">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Average Confidence:</span>
+                                <span class="stat-value" id="averageConfidence">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Diagnostics Tab -->
+                    <div id="diagnosticsTab" class="tab-content">
+                        <div class="diagnostics-section">
+                            <h3>AI Performance</h3>
+                            <div class="diagnostics-grid">
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Total AI Calls:</span>
+                                    <span class="diagnostic-value" id="totalAICalls">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Successful Calls:</span>
+                                    <span class="diagnostic-value" id="successfulAICalls">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Failed Calls:</span>
+                                    <span class="diagnostic-value" id="failedAICalls">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Cached Calls:</span>
+                                    <span class="diagnostic-value" id="cachedAICalls">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Average Latency:</span>
+                                    <span class="diagnostic-value" id="averageLatency">0ms</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Success Rate:</span>
+                                    <span class="diagnostic-value" id="aiSuccessRate">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="diagnostics-section">
+                            <h3>Cache Performance</h3>
+                            <div class="diagnostics-grid">
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Cache Hits:</span>
+                                    <span class="diagnostic-value" id="cacheHits">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Cache Misses:</span>
+                                    <span class="diagnostic-value" id="cacheMisses">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Hit Rate:</span>
+                                    <span class="diagnostic-value" id="cacheHitRate">0%</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Cache Size:</span>
+                                    <span class="diagnostic-value" id="cacheSize">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Evictions:</span>
+                                    <span class="diagnostic-value" id="cacheEvictions">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="diagnostics-section">
+                            <h3>Processing Statistics</h3>
+                            <div class="diagnostics-grid">
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Total Files:</span>
+                                    <span class="diagnostic-value" id="totalFiles">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Regex Processed:</span>
+                                    <span class="diagnostic-value" id="regexProcessed">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">AI Processed:</span>
+                                    <span class="diagnostic-value" id="aiProcessed">0</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Average Confidence:</span>
+                                    <span class="diagnostic-value" id="averageConfidence">0%</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Avg Processing Time:</span>
+                                    <span class="diagnostic-value" id="avgProcessingTime">0ms</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="diagnostics-section">
+                            <h3>System Performance</h3>
+                            <div class="diagnostics-grid">
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Memory Usage:</span>
+                                    <span class="diagnostic-value" id="memoryUsage">0 MB</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Session Duration:</span>
+                                    <span class="diagnostic-value" id="sessionDuration">0s</span>
+                                </div>
+                                <div class="diagnostic-item">
+                                    <span class="diagnostic-label">Last Activity:</span>
+                                    <span class="diagnostic-value" id="lastActivity">Never</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="diagnostics-section">
+                            <h3>Error Log</h3>
+                            <div class="error-log" id="errorLog">
+                                <div class="error-log-item">No errors recorded</div>
+                            </div>
+                        </div>
+                        
+                        <div class="diagnostics-actions">
+                            <button id="refreshDiagnostics" class="btn">Refresh</button>
+                            <button id="clearTelemetry" class="btn">Clear Data</button>
+                            <button id="exportTelemetry" class="btn">Export Data</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="saveSettings" class="btn primary">Save Settings</button>
+                    <button id="cancelSettings" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Table Details Modal -->
+        <div id="tableModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Table Details</h2>
+                    <span class="close" id="closeTableModal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div id="tableDetails">
+                        <p>No table data available</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="closeTableModalBtn" class="btn">Close</button>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Document Sorter v1.1 (AI Enhanced)</p>
+        </footer>
+    </div>
+    
+    <script src="../main/preload.js"></script>
+    <script src="renderer.js"></script>
+</body>
+</html>
