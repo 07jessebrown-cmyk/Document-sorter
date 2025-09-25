@@ -147,21 +147,158 @@ class AITextService {
    * @param {boolean} options.useCache - Whether to use cache (default: true)
    * @param {boolean} options.forceRefresh - Whether to bypass cache (default: false)
    * @param {number} options.concurrency - Max concurrent requests (default: this.batchSize)
+   * @param {boolean} options.useIntelligentBatching - Whether to use intelligent batching (default: true)
    * @returns {Promise<Array<Object>>} Array of structured metadata results
    */
   async extractMetadataAIBatch(items, options = {}) {
-    const { useCache = true, forceRefresh = false, concurrency = this.batchSize } = options;
+    const { 
+      useCache = true, 
+      forceRefresh = false, 
+      concurrency = this.batchSize,
+      useIntelligentBatching = true
+    } = options;
 
     if (!this.isEnabled || !Array.isArray(items) || items.length === 0) {
       return [];
     }
 
-    const results = [];
     const validItems = items.filter(item => item && item.text && item.text.trim().length > 0);
 
     if (validItems.length === 0) {
-      return results;
+      return [];
     }
+
+    // Validate LLM client is available
+    if (!this.llmClient) {
+      console.warn('AI Text Service: LLM client not initialized');
+      return [];
+    }
+
+    try {
+      // Use intelligent batching if enabled and LLM client supports it
+      if (useIntelligentBatching && typeof this.llmClient.callLLMIntelligentBatch === 'function') {
+        try {
+          return await this.extractMetadataAIIntelligentBatch(validItems, options);
+        } catch (intelligentError) {
+          console.warn('Intelligent batching failed, falling back to traditional batching:', intelligentError.message);
+          return await this.extractMetadataAITraditionalBatch(validItems, options);
+        }
+      } else {
+        return await this.extractMetadataAITraditionalBatch(validItems, options);
+      }
+    } catch (error) {
+      console.error('AI batch processing error:', error.message);
+      
+      // Track error
+      if (this.telemetry) {
+        this.telemetry.trackError('ai_batch_error', error.message, { 
+          method: 'extractMetadataAIBatch',
+          itemCount: validItems.length
+        });
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Extract metadata using intelligent batching (groups similar requests)
+   * @param {Array<Object>} validItems - Array of valid items with text property
+   * @param {Object} options - Optional configuration
+   * @returns {Promise<Array<Object>>} Array of structured metadata results
+   * @private
+   */
+  async extractMetadataAIIntelligentBatch(validItems, options = {}) {
+    const { useCache = true, forceRefresh = false } = options;
+
+    // Prepare batch requests
+    const requests = validItems.map((item, index) => {
+      const textHash = this.generateTextHash(item.text);
+      
+      return {
+        originalIndex: index,
+        textHash: textHash,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert document metadata extraction assistant. Extract client name, date, and document type from the provided text. Always respond with valid JSON only.'
+          },
+          {
+            role: 'user',
+            content: this.buildMetadataPrompt(item.text, {
+              model: this.model,
+              includeExamples: true,
+              maxTokens: 500
+            })
+          }
+        ],
+        maxTokens: 500,
+        temperature: 0.1,
+        model: this.model
+      };
+    });
+
+    // Use intelligent batching to group similar requests
+    const responses = await this.llmClient.callLLMIntelligentBatch(requests, {
+      groupBy: (req) => req.model,
+      maxBatchSize: this.batchSize
+    });
+
+    // Process responses and apply caching
+    const results = [];
+    for (let i = 0; i < responses.length; i++) {
+      const response = responses[i];
+      const originalItem = validItems[i];
+      
+      if (!response) {
+        results.push(null);
+        continue;
+      }
+
+      try {
+        // Parse the AI response
+        const metadata = this.parseAIResponse(response.content);
+        
+        if (!metadata) {
+          results.push(null);
+          continue;
+        }
+
+        // Validate and enhance the metadata
+        const result = this.validateAndEnhanceMetadata(metadata, originalItem.text);
+        
+        if (!result) {
+          results.push(null);
+          continue;
+        }
+
+        // Cache the result if cache is available
+        if (useCache && this.cache) {
+          await this.cache.set(originalItem.textHash, result);
+        }
+
+        results.push(result);
+
+      } catch (error) {
+        console.error(`Error processing AI response for item ${i}:`, error.message);
+        results.push(null);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Extract metadata using traditional batching (sequential batches)
+   * @param {Array<Object>} validItems - Array of valid items with text property
+   * @param {Object} options - Optional configuration
+   * @returns {Promise<Array<Object>>} Array of structured metadata results
+   * @private
+   */
+  async extractMetadataAITraditionalBatch(validItems, options = {}) {
+    const { useCache = true, forceRefresh = false, concurrency = this.batchSize } = options;
+
+    const results = [];
 
     try {
       // Process items in batches to respect rate limits
@@ -201,66 +338,96 @@ class AITextService {
         .map(item => item.result);
 
     } catch (error) {
-      console.error('AI batch processing error:', error.message);
+      console.error('AI traditional batch processing error:', error.message);
       return [];
     }
   }
 
   /**
-   * Call the AI service to extract metadata
+   * Call the AI service to extract metadata with retry logic
    * @param {string} text - Raw text to analyze
    * @param {Object} options - Options including language information
    * @returns {Promise<Object|null>} Structured metadata or null
    * @private
    */
   async callAIService(text, options = {}) {
-    try {
-      // Build the prompt for metadata extraction
-      const prompt = this.buildMetadataPrompt(text, options);
-      
-      // Call the LLM client
-      const response = await this.llmClient.callLLM({
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert document metadata extraction assistant. Extract client name, date, and document type from the provided text. Always respond with valid JSON only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        maxTokens: 500,
-        temperature: 0.1
-      });
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second base delay
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Build the prompt for metadata extraction
+        const prompt = this.buildMetadataPrompt(text, options);
+        
+        // Call the LLM client
+        const response = await this.llmClient.callLLM({
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert document metadata extraction assistant. Extract client name, date, and document type from the provided text. Always respond with valid JSON only.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          maxTokens: 500,
+          temperature: 0.1
+        });
 
-      if (!response || !response.content) {
-        console.warn('AI service returned empty response');
-        return null;
+        if (!response || !response.content) {
+          console.warn(`AI service returned empty response (attempt ${attempt}/${maxRetries})`);
+          if (attempt === maxRetries) return null;
+          continue;
+        }
+
+        // Parse the JSON response
+        const metadata = this.parseAIResponse(response.content);
+        
+        if (!metadata) {
+          console.warn(`Failed to parse AI response as valid metadata (attempt ${attempt}/${maxRetries})`);
+          if (attempt === maxRetries) return null;
+          
+          // Add delay before retry
+          await this.delay(baseDelay * Math.pow(2, attempt - 1));
+          continue;
+        }
+
+        // Validate and enhance the metadata
+        const result = this.validateAndEnhanceMetadata(metadata, text);
+        
+        if (!result) {
+          console.warn(`Metadata validation failed (attempt ${attempt}/${maxRetries})`);
+          if (attempt === maxRetries) return null;
+          
+          // Add delay before retry
+          await this.delay(baseDelay * Math.pow(2, attempt - 1));
+          continue;
+        }
+
+        // Success - return the result
+        return result;
+
+      } catch (error) {
+        console.error(`AI service call failed (attempt ${attempt}/${maxRetries}):`, error.message);
+        
+        if (attempt === maxRetries) {
+          return null;
+        }
+        
+        // Add delay before retry
+        await this.delay(baseDelay * Math.pow(2, attempt - 1));
       }
-
-      // Parse the JSON response
-      const metadata = this.parseAIResponse(response.content);
-      
-      if (!metadata) {
-        console.warn('Failed to parse AI response as valid metadata');
-        return null;
-      }
-
-      // Validate and enhance the metadata
-      return this.validateAndEnhanceMetadata(metadata, text);
-
-    } catch (error) {
-      console.error('AI service call failed:', error.message);
-      return null;
     }
+    
+    return null;
   }
 
   /**
-   * Build the prompt for metadata extraction
+   * Build the prompt for metadata extraction with enhanced context
    * @param {string} text - Raw text to analyze
-   * @param {Object} options - Options including language information
+   * @param {Object} options - Options including language and table information
    * @returns {string} Formatted prompt
    * @private
    */
@@ -272,7 +439,9 @@ class AITextService {
       includeExamples: true,
       maxTokens: 500,
       detectedLanguage: options.detectedLanguage,
-      languageName: options.languageName
+      languageName: options.languageName,
+      hasTableData: options.hasTableData || false,
+      tableContext: options.tableContext || null
     });
     
     // Return the user message content
@@ -280,33 +449,38 @@ class AITextService {
   }
 
   /**
-   * Parse AI response and extract JSON
+   * Parse AI response and extract JSON with strict validation
    * @param {string} response - Raw AI response
    * @returns {Object|null} Parsed metadata or null
    * @private
    */
   parseAIResponse(response) {
     try {
-      // Try to find JSON in the response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.warn('No JSON found in AI response');
-        return null;
-      }
-
-      const jsonStr = jsonMatch[0];
-      const metadata = JSON.parse(jsonStr);
-
-      // Validate required keys
-      const requiredKeys = ['clientName', 'clientConfidence', 'date', 'dateConfidence', 'docType', 'docTypeConfidence', 'snippets'];
-      const hasAllKeys = requiredKeys.every(key => key in metadata);
+      // Clean the response - remove any non-JSON text
+      const cleanedResponse = response.trim();
       
-      if (!hasAllKeys) {
-        console.warn('AI response missing required keys');
+      // Try to find JSON in the response with better pattern matching
+      let jsonStart = cleanedResponse.indexOf('{');
+      let jsonEnd = cleanedResponse.lastIndexOf('}');
+      
+      if (jsonStart === -1 || jsonEnd === -1 || jsonStart >= jsonEnd) {
+        console.warn('No valid JSON object found in AI response');
         return null;
       }
 
-      return metadata;
+      const jsonString = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+      const metadata = JSON.parse(jsonString);
+
+      // Use the validation function from ai_prompts
+      const { validateResponse } = require('./ai_prompts');
+      const validation = validateResponse(response);
+      
+      if (!validation.isValid) {
+        console.warn('AI response validation failed:', validation.error);
+        return null;
+      }
+
+      return validation.data;
 
     } catch (error) {
       console.warn('Failed to parse AI response as JSON:', error.message);
@@ -315,29 +489,51 @@ class AITextService {
   }
 
   /**
-   * Validate and enhance metadata with additional processing
+   * Validate and enhance metadata with additional processing and sanitization
    * @param {Object} metadata - Raw metadata from AI
    * @param {string} originalText - Original text for validation
-   * @returns {Object} Validated and enhanced metadata
+   * @returns {Object|null} Validated and enhanced metadata or null if invalid
    * @private
    */
   validateAndEnhanceMetadata(metadata, originalText) {
-    const result = {
-      clientName: this.validateClientName(metadata.clientName),
-      clientConfidence: this.validateConfidence(metadata.clientConfidence),
-      date: this.validateDate(metadata.date),
-      dateConfidence: this.validateConfidence(metadata.dateConfidence),
-      docType: this.validateDocumentType(metadata.docType),
-      docTypeConfidence: this.validateConfidence(metadata.docTypeConfidence),
-      snippets: this.validateSnippets(metadata.snippets, originalText),
-      source: 'AI',
-      timestamp: new Date().toISOString()
-    };
+    try {
+      // Sanitize and validate each field
+      const result = {
+        clientName: this.validateClientName(metadata.clientName),
+        clientConfidence: this.validateConfidence(metadata.clientConfidence),
+        date: this.validateDate(metadata.date),
+        dateConfidence: this.validateConfidence(metadata.dateConfidence),
+        docType: this.validateDocumentType(metadata.docType),
+        docTypeConfidence: this.validateConfidence(metadata.docTypeConfidence),
+        snippets: this.validateSnippets(metadata.snippets, originalText),
+        source: 'AI',
+        timestamp: new Date().toISOString()
+      };
 
-    // Calculate overall confidence
-    result.overallConfidence = this.calculateOverallConfidence(result);
+      // Additional validation - ensure we have at least some useful data
+      // Only reject if all fields are null/empty AND all confidences are 0
+      const hasValidData = result.clientName || result.date || result.docType;
+      const hasAnyConfidence = result.clientConfidence > 0 || result.dateConfidence > 0 || result.docTypeConfidence > 0;
+      
+      if (!hasValidData && !hasAnyConfidence) {
+        console.warn('AI response contains no valid metadata');
+        return null;
+      }
 
-    return result;
+      // Calculate overall confidence
+      result.overallConfidence = this.calculateOverallConfidence(result);
+
+      // Sanitize text fields to prevent XSS or other issues
+      result.clientName = this.sanitizeText(result.clientName);
+      result.docType = this.sanitizeText(result.docType);
+      result.snippets = result.snippets.map(snippet => this.sanitizeText(snippet));
+
+      return result;
+
+    } catch (error) {
+      console.error('Error validating and enhancing metadata:', error.message);
+      return null;
+    }
   }
 
   /**
@@ -467,6 +663,27 @@ class AITextService {
    */
   generateTextHash(text) {
     return crypto.createHash('sha256').update(text).digest('hex');
+  }
+
+  /**
+   * Sanitize text to prevent XSS and other security issues
+   * @param {string|null} text - Text to sanitize
+   * @returns {string|null} Sanitized text or null
+   * @private
+   */
+  sanitizeText(text) {
+    if (!text || typeof text !== 'string') {
+      return text;
+    }
+
+    // Remove potentially dangerous characters and normalize whitespace
+    return text
+      .replace(/[<>]/g, '') // Remove angle brackets
+      .replace(/javascript:/gi, '') // Remove javascript: protocol
+      .replace(/on\w+\s*=\s*"[^"]*"/gi, '') // Remove event handlers with quotes
+      .replace(/on\w+\s*=\s*'[^']*'/gi, '') // Remove event handlers with single quotes
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
   }
 
   /**

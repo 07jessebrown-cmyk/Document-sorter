@@ -1314,6 +1314,12 @@ ipcMain.handle('toggle-ai', async (event, enabled) => {
 
 ipcMain.handle('get-diagnostics', async () => {
   try {
+    if (enhancedParsingService && enhancedParsingService.telemetry) {
+      // Use telemetry service for comprehensive diagnostics
+      return enhancedParsingService.getTelemetryDiagnostics();
+    }
+    
+    // Fallback to basic diagnostics if telemetry is not available
     const diagnostics = {
       ai: {
         totalCalls: 0,
@@ -1386,6 +1392,9 @@ ipcMain.handle('clear-telemetry', async () => {
       if (enhancedParsingService.aiCache) {
         await enhancedParsingService.aiCache.clear();
       }
+      if (enhancedParsingService.telemetry) {
+        await enhancedParsingService.telemetry.clearData();
+      }
     }
     console.log('Telemetry data cleared');
     return { success: true };
@@ -1397,6 +1406,11 @@ ipcMain.handle('clear-telemetry', async () => {
 
 ipcMain.handle('export-telemetry', async () => {
   try {
+    if (enhancedParsingService && enhancedParsingService.telemetry) {
+      return enhancedParsingService.telemetry.exportData();
+    }
+    
+    // Fallback to diagnostics if telemetry service not available
     const diagnostics = await ipcMain.invoke('get-diagnostics');
     return diagnostics;
   } catch (error) {

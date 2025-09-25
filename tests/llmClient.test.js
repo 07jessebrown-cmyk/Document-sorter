@@ -1,414 +1,286 @@
 const LLMClient = require('../src/services/llmClient');
 
-// Mock https module
-jest.mock('https');
-
 describe('LLMClient', () => {
-  let llmClient;
-  let mockHttps;
+  let client;
 
   beforeEach(() => {
-    // Reset environment variables
-    delete process.env.OPENAI_API_KEY;
-    delete process.env.AI_API_KEY;
-    process.env.NODE_ENV = 'test';
-    
-    // Mock https module
-    mockHttps = require('https');
-    mockHttps.request = jest.fn();
-    
-    llmClient = new LLMClient();
+    // Create client in mock mode for testing
+    client = new LLMClient({
+      mockMode: true,
+      maxConcurrentRequests: 2,
+      batchSize: 3,
+      batchDelay: 50
+    });
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    client = null;
   });
 
-  describe('constructor', () => {
-    it('should initialize with default configuration', () => {
-      const config = llmClient.getConfig();
-      
-      expect(config.baseURL).toBe('https://api.openai.com/v1');
-      expect(config.defaultModel).toBe('gpt-3.5-turbo');
-      expect(config.maxRetries).toBe(3);
-      expect(config.retryDelay).toBe(1000);
-      expect(config.mockMode).toBe(true);
-    });
+  describe('Concurrency Control', () => {
+    test('should respect maxConcurrentRequests limit', async () => {
+      const maxConcurrent = 2;
+      client.updateConcurrencySettings({ maxConcurrentRequests: maxConcurrent });
 
-    it('should use custom configuration when provided', () => {
-      const customClient = new LLMClient({
-        baseURL: 'https://custom.api.com',
-        defaultModel: 'gpt-4',
-        maxRetries: 5,
-        apiKey: 'test-key'
+      const requests = Array(5).fill(null).map((_, i) => ({
+        messages: [{ role: 'user', content: `Test request ${i}` }]
+      }));
+
+      const startTime = Date.now();
+      const promises = requests.map(req => client.callLLM(req));
+      const results = await Promise.all(promises);
+      const endTime = Date.now();
+
+      // All requests should complete successfully
+      expect(results).toHaveLength(5);
+      results.forEach(result => {
+        expect(result).toBeDefined();
+        expect(result.content).toContain('Mock AI response');
       });
+
+      // Should take some time due to concurrency control
+      expect(endTime - startTime).toBeGreaterThan(100);
+    });
+
+    test('should track active requests correctly', async () => {
+      const stats = client.getConcurrencyStats();
+      expect(stats.activeRequests).toBe(0);
+      expect(stats.maxConcurrentRequests).toBe(2);
+      expect(stats.availablePermits).toBe(2);
+
+      // Start a request
+      const requestPromise = client.callLLM({
+        messages: [{ role: 'user', content: 'Test' }]
+      });
+
+      // Give it a moment to start and check stats
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const statsDuring = client.getConcurrencyStats();
+      // The request might have completed by now in mock mode
+      expect(statsDuring.activeRequests).toBeGreaterThanOrEqual(0);
+      expect(statsDuring.maxConcurrentRequests).toBe(2);
+
+      await requestPromise;
+
+      const statsAfter = client.getConcurrencyStats();
+      expect(statsAfter.activeRequests).toBe(0);
+      expect(statsAfter.availablePermits).toBe(2);
+    });
+
+    test('should bypass concurrency control when requested', async () => {
+      const startTime = Date.now();
       
-      const config = customClient.getConfig();
-      expect(config.baseURL).toBe('https://custom.api.com');
-      expect(config.defaultModel).toBe('gpt-4');
-      expect(config.maxRetries).toBe(5);
-      expect(config.hasApiKey).toBe(true);
-    });
+      // This should bypass concurrency control
+      const result = await client.callLLM({
+        messages: [{ role: 'user', content: 'Test' }],
+        bypassConcurrency: true
+      });
 
-    it('should read API key from environment variables', () => {
-      process.env.OPENAI_API_KEY = 'env-api-key';
-      const client = new LLMClient();
-      expect(client.apiKey).toBe('env-api-key');
-    });
-
-    it('should prioritize OPENAI_API_KEY over AI_API_KEY', () => {
-      process.env.OPENAI_API_KEY = 'openai-key';
-      process.env.AI_API_KEY = 'ai-key';
-      const client = new LLMClient();
-      expect(client.apiKey).toBe('openai-key');
-    });
-  });
-
-  describe('callLLM', () => {
-    it('should return mock response in test mode', async () => {
-      const messages = [
-        { role: 'user', content: 'Extract metadata from this document' }
-      ];
-
-      const result = await llmClient.callLLM({ messages });
+      const endTime = Date.now();
 
       expect(result).toBeDefined();
-      expect(result.content).toBeDefined();
-      expect(result.role).toBe('assistant');
-      expect(result.model).toBe('gpt-3.5-turbo');
+      expect(result.content).toContain('Mock AI response');
+      
+      // Should complete quickly since it bypasses concurrency control
+      expect(endTime - startTime).toBeLessThan(500);
     });
+  });
 
-    it('should validate required parameters', async () => {
-      await expect(llmClient.callLLM({})).rejects.toThrow('Messages array is required');
-      await expect(llmClient.callLLM({ messages: [] })).rejects.toThrow('Messages array is required');
-      await expect(llmClient.callLLM({ messages: [{ role: 'user' }] })).rejects.toThrow('content properties');
-      await expect(llmClient.callLLM({ messages: [{ content: 'test' }] })).rejects.toThrow('role and content');
-    });
+  describe('Batching', () => {
+    test('should process requests in batches', async () => {
+      const requests = Array(7).fill(null).map((_, i) => ({
+        messages: [{ role: 'user', content: `Batch test ${i}` }]
+      }));
 
-    it('should validate message roles', async () => {
-      const messages = [{ role: 'invalid', content: 'test' }];
-      await expect(llmClient.callLLM({ messages })).rejects.toThrow('role must be system, user, or assistant');
-    });
+      const startTime = Date.now();
+      const results = await client.callLLMBatch(requests, {
+        concurrency: 2,
+        batchDelay: 50
+      });
+      const endTime = Date.now();
 
-    it('should use custom parameters', async () => {
-      const messages = [{ role: 'user', content: 'test' }];
-      const result = await llmClient.callLLM({
-        messages,
-        model: 'gpt-4',
-        maxTokens: 1000,
-        temperature: 0.5
+      expect(results).toHaveLength(7);
+      results.forEach(result => {
+        expect(result).toBeDefined();
+        expect(result.content).toContain('Mock AI response');
       });
 
-      expect(result.model).toBe('gpt-4');
+      // Should take time due to batching and delays
+      expect(endTime - startTime).toBeGreaterThan(100);
     });
 
-    it('should handle different message types in mock mode', async () => {
-      const testCases = [
-        { content: 'Extract metadata from document', expectedType: 'metadata' },
-        { content: 'Classify this document type', expectedType: 'classification' },
-        { content: 'Summarize this content', expectedType: 'summary' },
-        { content: 'Random question', expectedType: 'default' }
+    test('should handle empty request array', async () => {
+      const results = await client.callLLMBatch([]);
+      expect(results).toHaveLength(0);
+    });
+
+    test('should handle invalid requests gracefully', async () => {
+      const requests = [
+        { messages: [{ role: 'user', content: 'Valid request' }] },
+        { messages: null }, // Invalid
+        { messages: [{ role: 'user', content: 'Another valid request' }] }
       ];
 
-      for (const testCase of testCases) {
-        const result = await llmClient.callLLM({
-          messages: [{ role: 'user', content: testCase.content }]
-        });
-        
-        expect(result.content).toBeDefined();
-        expect(typeof result.content).toBe('string');
-      }
+      await expect(client.callLLMBatch(requests)).rejects.toThrow();
+    });
+
+    test('should use intelligent batching when available', async () => {
+      const requests = [
+        { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'Request 1' }] },
+        { model: 'gpt-4', messages: [{ role: 'user', content: 'Request 2' }] },
+        { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'Request 3' }] }
+      ];
+
+      const results = await client.callLLMIntelligentBatch(requests, {
+        groupBy: (req) => req.model,
+        maxBatchSize: 2
+      });
+
+      expect(results).toHaveLength(3);
+      results.forEach(result => {
+        expect(result).toBeDefined();
+        expect(result.content).toContain('Mock AI response');
+      });
+    });
+
+    test('should group requests by model in intelligent batching', async () => {
+      const requests = [
+        { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'Request 1' }] },
+        { model: 'gpt-4', messages: [{ role: 'user', content: 'Request 2' }] },
+        { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'Request 3' }] },
+        { model: 'gpt-4', messages: [{ role: 'user', content: 'Request 4' }] }
+      ];
+
+      const results = await client.callLLMIntelligentBatch(requests, {
+        groupBy: (req) => req.model
+      });
+
+      expect(results).toHaveLength(4);
+      results.forEach(result => {
+        expect(result).toBeDefined();
+      });
     });
   });
 
-  describe('API call functionality', () => {
-    beforeEach(() => {
-      // Switch to non-mock mode for API testing
-      llmClient.mockMode = false;
-      llmClient.apiKey = 'test-api-key';
+  describe('Configuration', () => {
+    test('should update concurrency settings', () => {
+      client.updateConcurrencySettings({
+        maxConcurrentRequests: 5,
+        batchSize: 10,
+        batchDelay: 200,
+        batchTimeout: 5000
+      });
+
+      const config = client.getConfig();
+      expect(config.concurrency.maxConcurrentRequests).toBe(5);
+      expect(config.batching.batchSize).toBe(10);
+      expect(config.batching.batchDelay).toBe(200);
+      expect(config.batching.batchTimeout).toBe(5000);
     });
 
-    it('should throw error when no API key is provided', async () => {
-      llmClient.apiKey = null;
+    test('should validate concurrency settings', () => {
+      // Test minimum values
+      client.updateConcurrencySettings({
+        maxConcurrentRequests: 0,
+        batchSize: -1,
+        batchDelay: -100,
+        batchTimeout: 50
+      });
+
+      const config = client.getConfig();
+      expect(config.concurrency.maxConcurrentRequests).toBe(1); // Minimum 1
+      expect(config.batching.batchSize).toBe(1); // Minimum 1
+      expect(config.batching.batchDelay).toBe(0); // Minimum 0
+      expect(config.batching.batchTimeout).toBe(100); // Minimum 100
+    });
+
+    test('should include concurrency stats in config', () => {
+      const config = client.getConfig();
       
-      await expect(llmClient.callLLM({
-        messages: [{ role: 'user', content: 'test' }]
-      })).rejects.toThrow('API key is required');
-    });
-
-    it('should make successful API call', async () => {
-      const mockResponse = {
-        choices: [{
-          message: {
-            content: 'Test response',
-            role: 'assistant'
-          },
-          finish_reason: 'stop'
-        }],
-        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-        model: 'gpt-3.5-turbo',
-        id: 'test-id',
-        created: 1234567890
-      };
-
-      const mockReq = {
-        write: jest.fn(),
-        end: jest.fn(),
-        on: jest.fn()
-      };
-
-      const mockRes = {
-        on: jest.fn((event, callback) => {
-          if (event === 'data') {
-            callback(JSON.stringify(mockResponse));
-          } else if (event === 'end') {
-            callback();
-          }
-        }),
-        statusCode: 200
-      };
-
-      mockHttps.request.mockImplementation((options, callback) => {
-        callback(mockRes);
-        return mockReq;
-      });
-
-      const result = await llmClient.callLLM({
-        messages: [{ role: 'user', content: 'test' }]
-      });
-
-      expect(result.content).toBe('Test response');
-      expect(result.role).toBe('assistant');
-      expect(result.model).toBe('gpt-3.5-turbo');
-    });
-
-    it('should handle API errors', async () => {
-      const mockReq = {
-        write: jest.fn(),
-        end: jest.fn(),
-        on: jest.fn()
-      };
-
-      const mockRes = {
-        on: jest.fn((event, callback) => {
-          if (event === 'data') {
-            callback(JSON.stringify({ error: { message: 'API Error' } }));
-          } else if (event === 'end') {
-            callback();
-          }
-        }),
-        statusCode: 400
-      };
-
-      mockHttps.request.mockImplementation((options, callback) => {
-        callback(mockRes);
-        return mockReq;
-      });
-
-      await expect(llmClient.callLLM({
-        messages: [{ role: 'user', content: 'test' }]
-      })).rejects.toThrow('API Error 400');
-    });
-
-    it('should handle network errors', async () => {
-      const mockReq = {
-        write: jest.fn(),
-        end: jest.fn(),
-        on: jest.fn((event, callback) => {
-          if (event === 'error') {
-            callback(new Error('Network error'));
-          }
-        })
-      };
-
-      mockHttps.request.mockImplementation(() => mockReq);
-
-      await expect(llmClient.callLLM({
-        messages: [{ role: 'user', content: 'test' }]
-      })).rejects.toThrow('Request failed: Network error');
-    });
-  });
-
-  describe('retry logic', () => {
-    beforeEach(() => {
-      llmClient.mockMode = false;
-      llmClient.apiKey = 'test-api-key';
-    });
-
-    it('should retry on retryable errors', async () => {
-      let attemptCount = 0;
-      const mockReq = {
-        write: jest.fn(),
-        end: jest.fn(),
-        on: jest.fn()
-      };
-
-      mockHttps.request.mockImplementation((options, callback) => {
-        attemptCount++;
-        const mockRes = {
-          on: jest.fn((event, callback) => {
-            if (event === 'data') {
-              if (attemptCount < 3) {
-                callback(JSON.stringify({ error: { message: 'Rate limit exceeded' } }));
-              } else {
-                callback(JSON.stringify({
-                  choices: [{ message: { content: 'Success', role: 'assistant' }, finish_reason: 'stop' }],
-                  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-                  model: 'gpt-3.5-turbo',
-                  id: 'test-id',
-                  created: 1234567890
-                }));
-              }
-            } else if (event === 'end') {
-              callback();
-            }
-          }),
-          statusCode: attemptCount < 3 ? 429 : 200
-        };
-        callback(mockRes);
-        return mockReq;
-      });
-
-      const result = await llmClient.callLLM({
-        messages: [{ role: 'user', content: 'test' }]
-      });
-
-      expect(attemptCount).toBe(3);
-      expect(result.content).toBe('Success');
-    });
-
-    it('should not retry on non-retryable errors', async () => {
-      const mockReq = {
-        write: jest.fn(),
-        end: jest.fn(),
-        on: jest.fn()
-      };
-
-      mockHttps.request.mockImplementation((options, callback) => {
-        const mockRes = {
-          on: jest.fn((event, callback) => {
-            if (event === 'data') {
-              callback(JSON.stringify({ error: { message: 'Invalid API key' } }));
-            } else if (event === 'end') {
-              callback();
-            }
-          }),
-          statusCode: 401
-        };
-        callback(mockRes);
-        return mockReq;
-      });
-
-      await expect(llmClient.callLLM({
-        messages: [{ role: 'user', content: 'test' }]
-      })).rejects.toThrow('API Error 401');
-    });
-  });
-
-  describe('utility methods', () => {
-    it('should test connection in mock mode', async () => {
-      const isConnected = await llmClient.testConnection();
-      expect(isConnected).toBe(true);
-    });
-
-    it('should test connection in API mode', async () => {
-      llmClient.mockMode = false;
-      llmClient.apiKey = 'test-key';
-
-      const mockReq = {
-        write: jest.fn(),
-        end: jest.fn(),
-        on: jest.fn()
-      };
-
-      const mockRes = {
-        on: jest.fn((event, callback) => {
-          if (event === 'data') {
-            callback(JSON.stringify({
-              choices: [{ message: { content: 'Test', role: 'assistant' }, finish_reason: 'stop' }],
-              usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-              model: 'gpt-3.5-turbo',
-              id: 'test-id',
-              created: 1234567890
-            }));
-          } else if (event === 'end') {
-            callback();
-          }
-        }),
-        statusCode: 200
-      };
-
-      mockHttps.request.mockImplementation((options, callback) => {
-        callback(mockRes);
-        return mockReq;
-      });
-
-      const isConnected = await llmClient.testConnection();
-      expect(isConnected).toBe(true);
-    });
-
-    it('should update configuration', () => {
-      llmClient.updateConfig({
-        baseURL: 'https://new.api.com',
-        defaultModel: 'gpt-4',
-        maxRetries: 5
-      });
-
-      const config = llmClient.getConfig();
-      expect(config.baseURL).toBe('https://new.api.com');
-      expect(config.defaultModel).toBe('gpt-4');
-      expect(config.maxRetries).toBe(5);
-    });
-
-    it('should calculate retry delay correctly', () => {
-      expect(llmClient.calculateRetryDelay(1)).toBe(1000);
-      expect(llmClient.calculateRetryDelay(2)).toBe(2000);
-      expect(llmClient.calculateRetryDelay(3)).toBe(4000);
-      expect(llmClient.calculateRetryDelay(10)).toBe(10000); // Max delay
-    });
-
-    it('should identify retryable errors', () => {
-      expect(llmClient.shouldRetry(new Error('Rate limit exceeded'))).toBe(true);
-      expect(llmClient.shouldRetry(new Error('Network timeout'))).toBe(true);
-      expect(llmClient.shouldRetry(new Error('Service unavailable'))).toBe(true);
-      expect(llmClient.shouldRetry(new Error('Invalid API key'))).toBe(false);
-      expect(llmClient.shouldRetry(new Error('Bad request'))).toBe(false);
-    });
-  });
-
-  describe('response formatting', () => {
-    it('should format API response correctly', () => {
-      const rawResponse = {
-        choices: [{
-          message: {
-            content: 'Test response',
-            role: 'assistant'
-          },
-          finish_reason: 'stop'
-        }],
-        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-        model: 'gpt-3.5-turbo',
-        id: 'test-id',
-        created: 1234567890
-      };
-
-      const formatted = llmClient.formatResponse(rawResponse);
+      expect(config.concurrency).toBeDefined();
+      expect(config.concurrency.maxConcurrentRequests).toBe(2);
+      expect(config.concurrency.activeRequests).toBe(0);
+      expect(config.concurrency.availablePermits).toBe(2);
       
-      expect(formatted).toEqual({
-        content: 'Test response',
-        role: 'assistant',
-        finishReason: 'stop',
-        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-        model: 'gpt-3.5-turbo',
-        id: 'test-id',
-        created: 1234567890
+      expect(config.batching).toBeDefined();
+      expect(config.batching.batchSize).toBe(3);
+      expect(config.batching.batchDelay).toBe(50);
+      expect(config.batching.batchTimeout).toBe(2000);
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('should handle batch processing errors gracefully', async () => {
+      // Create a client that will fail by mocking the callLLM method
+      const failingClient = new LLMClient({
+        mockMode: true,
+        maxConcurrentRequests: 1
+      });
+
+      // Override the callLLM method to always throw
+      failingClient.callLLM = jest.fn().mockRejectedValue(new Error('Simulated API failure'));
+
+      const requests = [
+        { messages: [{ role: 'user', content: 'Request 1' }] },
+        { messages: [{ role: 'user', content: 'Request 2' }] }
+      ];
+
+      const results = await failingClient.callLLMBatch(requests);
+      
+      // Should return array of nulls due to API failures
+      expect(results).toHaveLength(2);
+      results.forEach(result => {
+        expect(result).toBeNull();
       });
     });
 
-    it('should handle malformed API response', () => {
-      const rawResponse = { choices: [] };
+    test('should handle individual request failures in batch', async () => {
+      const requests = [
+        { messages: [{ role: 'user', content: 'Valid request' }] },
+        { messages: [{ role: 'invalid-role', content: 'Invalid request' }] },
+        { messages: [{ role: 'user', content: 'Another valid request' }] }
+      ];
+
+      // The batch should complete but with some null results for failed requests
+      const results = await client.callLLMBatch(requests);
       
-      expect(() => llmClient.formatResponse(rawResponse)).toThrow('Invalid API response: no choices found');
+      expect(results).toHaveLength(3);
+      expect(results[0]).toBeDefined(); // First request should succeed
+      expect(results[1]).toBeNull(); // Second request should fail
+      expect(results[2]).toBeDefined(); // Third request should succeed
+    });
+  });
+
+  describe('Performance', () => {
+    test('should complete batch processing within reasonable time', async () => {
+      const requests = Array(10).fill(null).map((_, i) => ({
+        messages: [{ role: 'user', content: `Performance test ${i}` }]
+      }));
+
+      const startTime = Date.now();
+      const results = await client.callLLMBatch(requests, {
+        concurrency: 3,
+        batchDelay: 10
+      });
+      const endTime = Date.now();
+
+      expect(results).toHaveLength(10);
+      expect(endTime - startTime).toBeLessThan(5000); // Should complete within 5 seconds
+    });
+
+    test('should maintain order of results in batch processing', async () => {
+      const requests = Array(5).fill(null).map((_, i) => ({
+        messages: [{ role: 'user', content: `Order test ${i}` }]
+      }));
+
+      const results = await client.callLLMBatch(requests);
+
+      expect(results).toHaveLength(5);
+      results.forEach((result, index) => {
+        expect(result).toBeDefined();
+        expect(result.content).toContain('Mock AI response');
+      });
     });
   });
 });

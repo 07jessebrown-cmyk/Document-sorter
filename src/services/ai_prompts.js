@@ -23,7 +23,9 @@ function buildMetadataPrompt(text, options = {}) {
     includeExamples = true,
     maxTokens = 1000,
     detectedLanguage = null,
-    languageName = null
+    languageName = null,
+    hasTableData = false,
+    tableContext = null
   } = options;
 
   // Truncate text if too long (leave room for prompt and response)
@@ -32,8 +34,8 @@ function buildMetadataPrompt(text, options = {}) {
     ? text.substring(0, maxTextLength) + '\n\n[Text truncated...]'
     : text;
 
-  const systemPrompt = buildSystemPrompt(model, includeExamples, detectedLanguage, languageName);
-  const userPrompt = buildUserPrompt(truncatedText, detectedLanguage, languageName);
+  const systemPrompt = buildSystemPrompt(model, includeExamples, detectedLanguage, languageName, hasTableData, tableContext);
+  const userPrompt = buildUserPrompt(truncatedText, detectedLanguage, languageName, hasTableData, tableContext);
 
   return {
     messages: [
@@ -60,13 +62,18 @@ function buildMetadataPrompt(text, options = {}) {
  * @param {string} languageName - Human-readable language name (optional)
  * @returns {string} System prompt content
  */
-function buildSystemPrompt(model, includeExamples = true, detectedLanguage = null, languageName = null) {
+function buildSystemPrompt(model, includeExamples = true, detectedLanguage = null, languageName = null, hasTableData = false, tableContext = null) {
   // Add language-specific instructions if language is detected
   const languageContext = detectedLanguage && languageName 
     ? `\nLANGUAGE CONTEXT: The document appears to be written in ${languageName} (${detectedLanguage}). Please consider this when extracting metadata and interpreting document structure.`
     : '';
 
-  const baseInstructions = `You are a document metadata extraction assistant. Your task is to analyze document text and extract structured information about the client, date, and document type.${languageContext}
+  // Add table context if table data is present
+  const tableContextHint = hasTableData 
+    ? `\nTABLE CONTEXT: This document contains structured table data. Pay special attention to table headers, rows, and cells when extracting client names, dates, and document types. Table data often contains the most reliable metadata.`
+    : '';
+
+  const baseInstructions = `You are a document metadata extraction assistant. Your task is to analyze document text and extract structured information about the client, date, and document type.${languageContext}${tableContextHint}
 
 CRITICAL REQUIREMENTS:
 1. You MUST respond with ONLY valid JSON
@@ -148,12 +155,16 @@ Output: {
  * @param {string} languageName - Human-readable language name (optional)
  * @returns {string} User prompt content
  */
-function buildUserPrompt(text, detectedLanguage = null, languageName = null) {
+function buildUserPrompt(text, detectedLanguage = null, languageName = null, hasTableData = false, tableContext = null) {
   const languageHint = detectedLanguage && languageName 
     ? `\nNote: This document appears to be in ${languageName}. Please consider this when extracting metadata.`
     : '';
 
-  return `Please analyze the following document text and extract the metadata as specified in the system instructions. Respond with ONLY the JSON object, no additional text.${languageHint}
+  const tableHint = hasTableData 
+    ? `\nNote: This document contains table data. Focus on table content for the most accurate metadata extraction.`
+    : '';
+
+  return `Please analyze the following document text and extract the metadata as specified in the system instructions. Respond with ONLY the JSON object, no additional text.${languageHint}${tableHint}
 
 DOCUMENT TEXT:
 ${text}`;

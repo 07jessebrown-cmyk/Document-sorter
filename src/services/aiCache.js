@@ -200,6 +200,9 @@ class AICache {
       return null;
     }
     
+    // Update access count for LRU tracking
+    entry.accessCount = (entry.accessCount || 0) + 1;
+    
     this.stats.hits++;
     
     // Track cache hit
@@ -207,7 +210,8 @@ class AICache {
       this.telemetry.trackCachePerformance({ hit: true, size: this.memoryCache.size });
     }
     
-    return entry.data;
+    // Decompress data if it was compressed
+    return entry.compressed ? this.decompressData(entry.data) : entry.data;
   }
 
   /**
@@ -221,10 +225,15 @@ class AICache {
       await this.initialize();
     }
     
+    // Compress data if compression is enabled
+    const processedData = this.compressionEnabled ? this.compressData(data) : data;
+    
     const entry = {
-      data,
+      data: processedData,
       timestamp: Date.now(),
-      accessCount: 0
+      accessCount: 0,
+      compressed: this.compressionEnabled,
+      size: this.calculateDataSize(processedData)
     };
     
     this.memoryCache.set(hash, entry);
@@ -279,20 +288,36 @@ class AICache {
   }
 
   /**
-   * Evict the oldest entries when cache is full
+   * Evict entries using advanced LRU strategy with access count weighting
    * @returns {Promise<void>}
    */
   async evictOldest() {
     const entries = Array.from(this.memoryCache.entries());
     
-    // Sort by timestamp (oldest first)
-    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    // Calculate eviction score for each entry
+    const now = Date.now();
+    const scoredEntries = entries.map(([key, entry]) => {
+      const age = now - entry.timestamp;
+      const accessScore = entry.accessCount || 0;
+      
+      // Higher score = more likely to be evicted
+      // Factors: age (older = higher score), access count (lower = higher score)
+      const evictionScore = (age / this.maxAge) - (accessScore * 0.1);
+      
+      return { key, entry, evictionScore };
+    });
     
-    // Remove oldest 10% of entries
-    const toRemove = Math.ceil(entries.length * 0.1);
+    // Sort by eviction score (highest first = most likely to evict)
+    scoredEntries.sort((a, b) => b.evictionScore - a.evictionScore);
     
-    for (let i = 0; i < toRemove; i++) {
-      this.memoryCache.delete(entries[i][0]);
+    // Remove 10% of entries or enough to get under max size
+    const toRemove = Math.max(
+      Math.ceil(entries.length * 0.1),
+      entries.length - this.maxCacheSize + 1
+    );
+    
+    for (let i = 0; i < toRemove && i < scoredEntries.length; i++) {
+      this.memoryCache.delete(scoredEntries[i].key);
       this.stats.evictions++;
     }
   }
@@ -469,6 +494,128 @@ class AICache {
     }
     
     await this.saveToDisk();
+  }
+
+  /**
+   * Compress data using simple JSON string compression
+   * @param {Object} data - Data to compress
+   * @returns {string} Compressed data
+   * @private
+   */
+  compressData(data) {
+    try {
+      const jsonString = JSON.stringify(data);
+      // Simple compression: remove extra whitespace and use shorter property names
+      return jsonString
+        .replace(/\s+/g, ' ')
+        .replace(/"clientName"/g, '"c"')
+        .replace(/"clientConfidence"/g, '"cc"')
+        .replace(/"date"/g, '"d"')
+        .replace(/"dateConfidence"/g, '"dc"')
+        .replace(/"docType"/g, '"dt"')
+        .replace(/"docTypeConfidence"/g, '"dtc"')
+        .replace(/"snippets"/g, '"s"')
+        .replace(/"source"/g, '"src"')
+        .replace(/"timestamp"/g, '"ts"')
+        .replace(/"overallConfidence"/g, '"oc"')
+        .trim();
+    } catch (error) {
+      console.warn('Failed to compress data:', error.message);
+      return data;
+    }
+  }
+
+  /**
+   * Decompress data that was compressed
+   * @param {string} compressedData - Compressed data
+   * @returns {Object} Decompressed data
+   * @private
+   */
+  decompressData(compressedData) {
+    try {
+      // Reverse the compression
+      const decompressed = compressedData
+        .replace(/"c"/g, '"clientName"')
+        .replace(/"cc"/g, '"clientConfidence"')
+        .replace(/"d"/g, '"date"')
+        .replace(/"dc"/g, '"dateConfidence"')
+        .replace(/"dt"/g, '"docType"')
+        .replace(/"dtc"/g, '"docTypeConfidence"')
+        .replace(/"s"/g, '"snippets"')
+        .replace(/"src"/g, '"source"')
+        .replace(/"ts"/g, '"timestamp"')
+        .replace(/"oc"/g, '"overallConfidence"');
+      
+      return JSON.parse(decompressed);
+    } catch (error) {
+      console.warn('Failed to decompress data:', error.message);
+      return compressedData;
+    }
+  }
+
+  /**
+   * Calculate approximate data size in bytes
+   * @param {*} data - Data to measure
+   * @returns {number} Size in bytes
+   * @private
+   */
+  calculateDataSize(data) {
+    try {
+      return Buffer.byteLength(JSON.stringify(data), 'utf8');
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  /**
+   * Get total cache size in bytes
+   * @returns {number} Total cache size in bytes
+   */
+  getTotalCacheSize() {
+    let totalSize = 0;
+    for (const [key, entry] of this.memoryCache.entries()) {
+      totalSize += key.length * 2; // Key size (UTF-16)
+      totalSize += entry.size || 0; // Data size
+      totalSize += 50; // Overhead for entry metadata
+    }
+    return totalSize;
+  }
+
+  /**
+   * Warm up cache with common document patterns
+   * @param {Array} commonPatterns - Array of common document text patterns
+   * @returns {Promise<void>}
+   */
+  async warmCache(commonPatterns = []) {
+    if (!Array.isArray(commonPatterns) || commonPatterns.length === 0) {
+      return;
+    }
+
+    console.log(`🔥 Warming cache with ${commonPatterns.length} common patterns...`);
+    
+    for (const pattern of commonPatterns) {
+      const hash = this.generateHash(pattern);
+      const exists = await this.has(hash);
+      
+      if (!exists) {
+        // Pre-populate with a generic result for common patterns
+        const genericResult = {
+          clientName: 'Common Pattern',
+          clientConfidence: 0.5,
+          date: new Date().toISOString().split('T')[0],
+          dateConfidence: 0.5,
+          docType: 'Document',
+          docTypeConfidence: 0.5,
+          snippets: [pattern.substring(0, 50) + '...'],
+          source: 'cache-warmed',
+          timestamp: new Date().toISOString()
+        };
+        
+        await this.set(hash, genericResult);
+      }
+    }
+    
+    console.log(`✅ Cache warmed with ${commonPatterns.length} patterns`);
   }
 }
 

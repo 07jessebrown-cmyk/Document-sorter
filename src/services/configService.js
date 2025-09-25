@@ -68,17 +68,20 @@ class ConfigService {
         concurrentProcessing: true,
         maxConcurrentFiles: 5
       },
-      extraction: {
-        useOCR: false,
-        useTableExtraction: false,
-        useLLMEnhancer: true,
-        useHandwritingDetection: false,
-        ocrLanguage: 'eng',
-        ocrWorkerPoolSize: 2,
-        tableTimeout: 30000,
-        handwritingLanguage: 'eng',
-        handwritingWorkerPoolSize: 1
-      },
+    extraction: {
+      useOCR: false,
+      useTableExtraction: false,
+      useLLMEnhancer: true,
+      useHandwritingDetection: false,
+      useWatermarkDetection: false,
+      ocrLanguage: 'eng',
+      ocrWorkerPoolSize: 2,
+      tableTimeout: 30000,
+      handwritingLanguage: 'eng',
+      handwritingWorkerPoolSize: 1,
+      watermarkMinOccurrences: 3,
+      watermarkPageOverlapThreshold: 0.5
+    },
       telemetry: {
         enabled: true,
         logLevel: "info",

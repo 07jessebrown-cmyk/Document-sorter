@@ -7,6 +7,8 @@ const TableExtractorService = require('./tableExtractor');
 const OCRService = require('./ocrService');
 const LanguageService = require('./langService');
 const HandwritingService = require('./handwritingService');
+const WatermarkService = require('./watermarkService');
+const TelemetryService = require('./telemetryService');
 const { buildMetadataPrompt } = require('./ai_prompts');
 
 /**
@@ -45,12 +47,14 @@ class EnhancedParsingService extends ParsingService {
     this.useTableExtraction = options.useTableExtraction !== undefined ? options.useTableExtraction : this.extractionConfig.useTableExtraction;
     this.useLLMEnhancer = options.useLLMEnhancer !== undefined ? options.useLLMEnhancer : this.extractionConfig.useLLMEnhancer;
     this.useHandwritingDetection = options.useHandwritingDetection !== undefined ? options.useHandwritingDetection : this.extractionConfig.useHandwritingDetection;
+    this.useWatermarkDetection = options.useWatermarkDetection !== undefined ? options.useWatermarkDetection : this.extractionConfig.useWatermarkDetection;
     
     // Initialize AI services
     this.aiTextService = null;
     this.llmClient = null;
     this.aiCache = null;
     this.promptService = null;
+    this.telemetry = null;
     
     // Initialize table extractor if enabled
     this.tableExtractor = null;
@@ -88,6 +92,16 @@ class EnhancedParsingService extends ParsingService {
       });
     }
     
+    // Initialize watermark service if enabled
+    this.watermarkService = null;
+    if (this.useWatermarkDetection) {
+      this.watermarkService = new WatermarkService({
+        debug: this.configService.get('debug', false),
+        minOccurrences: this.configService.get('extraction.watermarkMinOccurrences', 3),
+        pageOverlapThreshold: this.configService.get('extraction.watermarkPageOverlapThreshold', 0.5)
+      });
+    }
+    
     // Processing statistics
     this.stats = {
       totalProcessed: 0,
@@ -98,6 +112,9 @@ class EnhancedParsingService extends ParsingService {
       errors: 0,
       averageConfidence: 0
     };
+    
+    // Initialize telemetry service
+    this.initializeTelemetry();
     
     // Initialize AI services if enabled (but don't fail if initialization fails)
     if (this.useAI) {
@@ -144,6 +161,32 @@ class EnhancedParsingService extends ParsingService {
   }
 
   /**
+   * Initialize telemetry service
+   * @returns {void}
+   */
+  initializeTelemetry() {
+    try {
+      this.telemetry = new TelemetryService({
+        enabled: this.configService.get('telemetry.enabled', true),
+        logDir: this.configService.get('telemetry.logDir'),
+        maxLogSize: this.configService.get('telemetry.maxLogSize', 10 * 1024 * 1024),
+        retentionDays: this.configService.get('telemetry.retentionDays', 30)
+      });
+      
+      // Initialize telemetry asynchronously
+      this.telemetry.initialize().catch(error => {
+        console.warn('Telemetry initialization failed:', error.message);
+        this.telemetry = null;
+      });
+      
+      console.log('📊 Telemetry service initialized');
+    } catch (error) {
+      console.warn('Failed to initialize telemetry service:', error.message);
+      this.telemetry = null;
+    }
+  }
+
+  /**
    * Initialize AI services
    * @returns {Promise<void>}
    */
@@ -170,6 +213,15 @@ class EnhancedParsingService extends ParsingService {
       this.aiTextService = new AITextService();
       this.aiTextService.setLLMClient(this.llmClient);
       this.aiTextService.setCache(this.aiCache);
+      this.aiTextService.setTelemetry(this.telemetry);
+
+      // Set telemetry for other services
+      if (this.llmClient) {
+        this.llmClient.setTelemetry(this.telemetry);
+      }
+      if (this.aiCache) {
+        this.aiCache.setTelemetry(this.telemetry);
+      }
 
       // Prompt service is now imported as functions
 
@@ -191,6 +243,7 @@ class EnhancedParsingService extends ParsingService {
    * @returns {Promise<Object>} Enhanced analysis result
    */
   async analyzeDocumentEnhanced(text, filePath, options = {}) {
+    const startTime = Date.now();
     this.stats.totalProcessed++;
     
     const result = {
@@ -210,6 +263,15 @@ class EnhancedParsingService extends ParsingService {
     };
 
     if (!text || text.trim().length === 0) {
+      // Track processing completion
+      if (this.telemetry) {
+        this.telemetry.trackFileProcessing({
+          method: 'regex',
+          confidence: 0,
+          processingTime: Date.now() - startTime,
+          success: false
+        });
+      }
       return result;
     }
 
@@ -245,6 +307,30 @@ class EnhancedParsingService extends ParsingService {
           }
         } catch (handwritingError) {
           console.warn(`Handwriting detection failed for ${filePath}:`, handwritingError.message);
+        }
+      }
+
+      // Step 1.6: Detect watermarks if enabled
+      let watermarkData = null;
+      if (this.useWatermarkDetection && this.watermarkService) {
+        try {
+          console.log(`💧 Detecting watermarks in: ${filePath}`);
+          watermarkData = await this.detectWatermarks(filePath, options);
+          if (watermarkData && watermarkData.success) {
+            result.watermarksDetected = watermarkData.watermarks.length > 0;
+            result.watermarks = watermarkData.watermarks;
+            result.watermarkConfidence = watermarkData.confidence;
+            result.watermarkCount = watermarkData.watermarks.length;
+            console.log(`💧 Watermark detection: ${watermarkData.watermarks.length} watermarks found (confidence: ${watermarkData.confidence})`);
+            
+            // Filter watermarks from text if high confidence
+            if (watermarkData.watermarks.length > 0) {
+              text = this.watermarkService.filterWatermarks(text, watermarkData.watermarks);
+              console.log(`💧 Filtered watermarks from text, new length: ${text.length}`);
+            }
+          }
+        } catch (watermarkError) {
+          console.warn(`Watermark detection failed for ${filePath}:`, watermarkError.message);
         }
       }
 
@@ -284,26 +370,77 @@ class EnhancedParsingService extends ParsingService {
           
           const aiResult = await this.processWithAI(text, filePath, aiOptions);
           if (aiResult) {
-            // Merge AI results with regex results
-            const mergedResult = this.mergeResults(enhancedRegexResult, aiResult);
+            // Merge AI results with regex results and table data
+            const mergedResult = this.mergeResults(enhancedRegexResult, aiResult, tableData);
             this.stats.averageConfidence = this.updateAverageConfidence(mergedResult.confidence);
+            
+            // Track AI processing completion
+            if (this.telemetry) {
+              try {
+                this.telemetry.trackFileProcessing({
+                  method: 'ai',
+                  confidence: mergedResult.confidence,
+                  processingTime: Date.now() - startTime,
+                  success: true
+                });
+              } catch (telemetryError) {
+                console.warn('Telemetry tracking failed:', telemetryError.message);
+              }
+            }
+            
             return mergedResult;
           }
         } catch (aiError) {
           console.warn(`AI processing failed for ${filePath}:`, aiError.message);
           this.stats.errors++;
+          
+          // Track AI processing error
+          if (this.telemetry) {
+            try {
+              this.telemetry.trackError('ai_processing_failed', aiError.message, { filePath });
+            } catch (telemetryError) {
+              console.warn('Telemetry error tracking failed:', telemetryError.message);
+            }
+          }
         }
       }
       
       // Use regex results
       this.stats.regexProcessed++;
       this.stats.averageConfidence = this.updateAverageConfidence(enhancedRegexResult.confidence);
+      
+      // Track processing completion
+      if (this.telemetry) {
+        try {
+          this.telemetry.trackFileProcessing({
+            method: 'regex',
+            confidence: enhancedRegexResult.confidence,
+            processingTime: Date.now() - startTime,
+            success: true
+          });
+        } catch (telemetryError) {
+          console.warn('Telemetry tracking failed:', telemetryError.message);
+        }
+      }
+      
       return enhancedRegexResult;
       
     } catch (error) {
       console.error(`Analysis failed for ${filePath}:`, error);
       this.stats.errors++;
       result.error = error.message;
+      
+      // Track processing error
+      if (this.telemetry) {
+        this.telemetry.trackFileProcessing({
+          method: 'regex',
+          confidence: 0,
+          processingTime: Date.now() - startTime,
+          success: false
+        });
+        this.telemetry.trackError('analysis_failed', error.message, { filePath });
+      }
+      
       return result;
     }
   }
@@ -401,6 +538,38 @@ class EnhancedParsingService extends ParsingService {
         success: false,
         hasHandwriting: false,
         handwritingType: 'none',
+        confidence: 0,
+        method: 'error',
+        errors: [error.message]
+      };
+    }
+  }
+
+  /**
+   * Detect watermarks in file
+   * @param {string} filePath - Path to file
+   * @param {Object} options - Detection options
+   * @returns {Promise<Object>} Watermark detection result
+   */
+  async detectWatermarks(filePath, options = {}) {
+    if (!this.watermarkService) {
+      return {
+        success: false,
+        watermarks: [],
+        confidence: 0,
+        method: 'none',
+        errors: ['Watermark detection not enabled']
+      };
+    }
+
+    try {
+      const result = await this.watermarkService.detectWatermarks(filePath, options);
+      return result;
+    } catch (error) {
+      console.error(`Watermark detection failed for ${filePath}:`, error);
+      return {
+        success: false,
+        watermarks: [],
         confidence: 0,
         method: 'error',
         errors: [error.message]
@@ -594,10 +763,29 @@ class EnhancedParsingService extends ParsingService {
       if (cachedResult) {
         this.stats.cacheHits++;
         console.log(`📦 Cache hit for: ${filePath}`);
+        
+        // Track cache hit
+        if (this.telemetry) {
+          try {
+            this.telemetry.trackCachePerformance({ hit: true, size: this.aiCache.memoryCache?.size || 0 });
+          } catch (telemetryError) {
+            console.warn('Telemetry cache tracking failed:', telemetryError.message);
+          }
+        }
+        
         return this.formatAIResult(cachedResult, 'ai-cached');
       }
       
       this.stats.cacheMisses++;
+      
+      // Track cache miss
+      if (this.telemetry) {
+        try {
+          this.telemetry.trackCachePerformance({ hit: false, size: this.aiCache.memoryCache?.size || 0 });
+        } catch (telemetryError) {
+          console.warn('Telemetry cache tracking failed:', telemetryError.message);
+        }
+      }
       
       // Process with AI
       const aiResult = await this.aiTextService.extractMetadataAI(text, {
@@ -611,6 +799,16 @@ class EnhancedParsingService extends ParsingService {
       if (aiResult) {
         // Cache the result
         await this.aiCache.set(cacheKey, aiResult);
+        
+        // Track cache set
+        if (this.telemetry) {
+          try {
+            this.telemetry.trackCachePerformance({ hit: false, size: this.aiCache.memoryCache?.size || 0 });
+          } catch (telemetryError) {
+            console.warn('Telemetry cache tracking failed:', telemetryError.message);
+          }
+        }
+        
         return this.formatAIResult(aiResult, 'ai');
       }
       
@@ -645,29 +843,113 @@ class EnhancedParsingService extends ParsingService {
   }
 
   /**
-   * Merge regex and AI results
+   * Merge results from all extraction methods with priority: regex > table > AI
    * @param {Object} regexResult - Regex analysis result
    * @param {Object} aiResult - AI analysis result
-   * @returns {Object} Merged result
+   * @param {Object} tableResult - Table extraction result (optional)
+   * @returns {Object} Merged result with enhanced confidence scoring
    */
-  mergeResults(regexResult, aiResult) {
+  mergeResults(regexResult, aiResult, tableResult = null) {
     const merged = { ...regexResult };
     
-    // Use AI results for missing or low-confidence fields
-    if (!merged.clientName || merged.clientConfidence < aiResult.clientConfidence) {
-      merged.clientName = aiResult.clientName;
-      merged.clientConfidence = aiResult.clientConfidence;
-    }
+    // Initialize field sources tracking
+    merged.fieldSources = {
+      clientName: 'regex',
+      date: 'regex',
+      type: 'regex',
+      amount: 'regex',
+      title: 'regex'
+    };
     
-    if (!merged.date || merged.dateConfidence < aiResult.dateConfidence) {
-      merged.date = aiResult.date;
-      merged.dateConfidence = aiResult.dateConfidence;
-    }
+    // Merge client name with priority: regex > table > AI
+    const clientNameResult = this.mergeField(
+      'clientName',
+      regexResult.clientName,
+      regexResult.clientConfidence,
+      'regex',
+      tableResult?.clientName,
+      tableResult?.clientConfidence,
+      'table',
+      aiResult.clientName,
+      aiResult.clientConfidence,
+      'ai'
+    );
     
-    if (merged.type === 'Unclassified' || merged.docTypeConfidence < aiResult.docTypeConfidence) {
-      merged.type = aiResult.type;
-      merged.docTypeConfidence = aiResult.docTypeConfidence;
-    }
+    merged.clientName = clientNameResult.value;
+    merged.clientConfidence = clientNameResult.confidence;
+    merged.fieldSources.clientName = clientNameResult.source;
+    
+    // Merge date with priority: regex > table > AI
+    const dateResult = this.mergeField(
+      'date',
+      regexResult.date,
+      regexResult.dateConfidence,
+      'regex',
+      tableResult?.date,
+      tableResult?.dateConfidence,
+      'table',
+      aiResult.date,
+      aiResult.dateConfidence,
+      'ai'
+    );
+    
+    merged.date = dateResult.value;
+    merged.dateConfidence = dateResult.confidence;
+    merged.fieldSources.date = dateResult.source;
+    
+    // Merge document type with priority: regex > table > AI
+    const docTypeResult = this.mergeField(
+      'type',
+      regexResult.type,
+      regexResult.docTypeConfidence,
+      'regex',
+      tableResult?.type,
+      tableResult?.typeConfidence,
+      'table',
+      aiResult.type,
+      aiResult.docTypeConfidence,
+      'ai'
+    );
+    
+    merged.type = docTypeResult.value;
+    merged.docTypeConfidence = docTypeResult.confidence;
+    merged.fieldSources.type = docTypeResult.source;
+    
+    // Merge amount with priority: regex > table > AI
+    const amountResult = this.mergeField(
+      'amount',
+      regexResult.amount,
+      regexResult.amountConfidence || 0,
+      'regex',
+      tableResult?.amount,
+      tableResult?.amountConfidence || 0,
+      'table',
+      aiResult.amount,
+      aiResult.amountConfidence || 0,
+      'ai'
+    );
+    
+    merged.amount = amountResult.value;
+    merged.amountConfidence = amountResult.confidence;
+    merged.fieldSources.amount = amountResult.source;
+    
+    // Merge title with priority: regex > table > AI
+    const titleResult = this.mergeField(
+      'title',
+      regexResult.title,
+      regexResult.titleConfidence || 0,
+      'regex',
+      tableResult?.title,
+      tableResult?.titleConfidence || 0,
+      'table',
+      aiResult.title,
+      aiResult.titleConfidence || 0,
+      'ai'
+    );
+    
+    merged.title = titleResult.value;
+    merged.titleConfidence = titleResult.confidence;
+    merged.fieldSources.title = titleResult.source;
     
     // Preserve table data from regex result (if any)
     if (regexResult.tables) {
@@ -676,16 +958,8 @@ class EnhancedParsingService extends ParsingService {
       merged.tableMethod = regexResult.tableMethod;
     }
     
-    // Update overall confidence
-    const confidences = [
-      merged.clientConfidence,
-      merged.dateConfidence,
-      merged.docTypeConfidence
-    ].filter(c => c > 0);
-    
-    merged.confidence = confidences.length > 0 
-      ? confidences.reduce((a, b) => a + b, 0) / confidences.length 
-      : 0;
+    // Calculate weighted overall confidence
+    merged.confidence = this.calculateWeightedConfidence(merged);
     
     // Update source to indicate hybrid approach
     merged.source = 'hybrid';
@@ -694,7 +968,107 @@ class EnhancedParsingService extends ParsingService {
     merged.aiConfidence = aiResult.aiConfidence;
     merged.snippets = aiResult.snippets;
     
+    // Add merge metadata
+    merged.mergeMetadata = {
+      methodsUsed: this.getMethodsUsed(merged.fieldSources),
+      confidenceBreakdown: {
+        clientName: merged.clientConfidence,
+        date: merged.dateConfidence,
+        type: merged.docTypeConfidence,
+        amount: merged.amountConfidence,
+        title: merged.titleConfidence
+      },
+      sourceBreakdown: merged.fieldSources
+    };
+    
     return merged;
+  }
+
+  /**
+   * Merge a single field from multiple sources with priority: regex > table > AI
+   * @param {string} fieldName - Name of the field being merged
+   * @param {*} regexValue - Value from regex extraction
+   * @param {number} regexConfidence - Confidence from regex extraction
+   * @param {string} regexSource - Source identifier for regex
+   * @param {*} tableValue - Value from table extraction
+   * @param {number} tableConfidence - Confidence from table extraction
+   * @param {string} tableSource - Source identifier for table
+   * @param {*} aiValue - Value from AI extraction
+   * @param {number} aiConfidence - Confidence from AI extraction
+   * @param {string} aiSource - Source identifier for AI
+   * @returns {Object} Merged field result with value, confidence, and source
+   * @private
+   */
+  mergeField(fieldName, regexValue, regexConfidence, regexSource, tableValue, tableConfidence, tableSource, aiValue, aiConfidence, aiSource) {
+    // Priority: regex > table > AI
+    // But if regex has no value or very low confidence, use the best available
+    
+    const candidates = [
+      { value: regexValue, confidence: regexConfidence || 0, source: regexSource },
+      { value: tableValue, confidence: tableConfidence || 0, source: tableSource },
+      { value: aiValue, confidence: aiConfidence || 0, source: aiSource }
+    ].filter(candidate => candidate.value !== null && candidate.value !== undefined && candidate.value !== '');
+    
+    if (candidates.length === 0) {
+      return { value: null, confidence: 0, source: 'none' };
+    }
+    
+    // If regex has a value and reasonable confidence, use it
+    if (regexValue && regexConfidence > 0.3) {
+      return { value: regexValue, confidence: regexConfidence, source: regexSource };
+    }
+    
+    // If table has a value and reasonable confidence, use it
+    if (tableValue && tableConfidence > 0.3) {
+      return { value: tableValue, confidence: tableConfidence, source: tableSource };
+    }
+    
+    // Otherwise, use the candidate with highest confidence
+    const bestCandidate = candidates.reduce((best, current) => 
+      current.confidence > best.confidence ? current : best
+    );
+    
+    return bestCandidate;
+  }
+
+  /**
+   * Calculate weighted confidence for merged results
+   * @param {Object} merged - Merged result object
+   * @returns {number} Weighted confidence score
+   * @private
+   */
+  calculateWeightedConfidence(merged) {
+    const fields = [
+      { value: merged.clientName, confidence: merged.clientConfidence, weight: 0.3 },
+      { value: merged.date, confidence: merged.dateConfidence, weight: 0.25 },
+      { value: merged.type, confidence: merged.docTypeConfidence, weight: 0.25 },
+      { value: merged.amount, confidence: merged.amountConfidence, weight: 0.1 },
+      { value: merged.title, confidence: merged.titleConfidence, weight: 0.1 }
+    ];
+    
+    let totalWeight = 0;
+    let weightedSum = 0;
+    
+    for (const field of fields) {
+      if (field.value && field.confidence > 0) {
+        weightedSum += field.confidence * field.weight;
+        totalWeight += field.weight;
+      }
+    }
+    
+    return totalWeight > 0 ? weightedSum / totalWeight : 0;
+  }
+
+  /**
+   * Get list of methods used in the merge
+   * @param {Object} fieldSources - Object mapping fields to their sources
+   * @returns {Array} Array of unique method names used
+   * @private
+   */
+  getMethodsUsed(fieldSources) {
+    const methods = new Set(Object.values(fieldSources));
+    methods.delete('none');
+    return Array.from(methods);
   }
 
   /**
@@ -742,7 +1116,21 @@ class EnhancedParsingService extends ParsingService {
             
             const aiResult = await this.processWithAI(doc.text, doc.filePath, aiOptions);
             if (aiResult) {
-              results[index] = this.mergeResults(result, aiResult);
+              // Extract table data from the result if available
+              const tableData = result.tables && result.tables.length > 0 ? {
+                clientName: result.clientName,
+                clientConfidence: result.clientConfidence,
+                date: result.date,
+                dateConfidence: result.dateConfidence,
+                type: result.type,
+                typeConfidence: result.docTypeConfidence,
+                amount: result.amount,
+                amountConfidence: result.amountConfidence,
+                title: result.title,
+                titleConfidence: result.titleConfidence
+              } : null;
+              
+              results[index] = this.mergeResults(result, aiResult, tableData);
               this.stats.aiProcessed++;
             } else {
               results[index] = result;
@@ -798,8 +1186,24 @@ class EnhancedParsingService extends ParsingService {
       aiThreshold: this.aiConfidenceThreshold,
       aiBatchSize: this.aiBatchSize,
       cacheStats: this.aiCache ? this.aiCache.getStats() : null,
-      extractionConfig: this.extractionConfig
+      extractionConfig: this.extractionConfig,
+      telemetryEnabled: this.telemetry !== null
     };
+  }
+
+  /**
+   * Get telemetry diagnostics
+   * @returns {Object} Telemetry diagnostics
+   */
+  getTelemetryDiagnostics() {
+    if (!this.telemetry) {
+      return {
+        enabled: false,
+        error: 'Telemetry service not initialized'
+      };
+    }
+    
+    return this.telemetry.getDiagnostics();
   }
 
   /**
@@ -871,6 +1275,21 @@ class EnhancedParsingService extends ParsingService {
         this.handwritingService = null;
       }
     }
+    if (config.useWatermarkDetection !== undefined) {
+      this.useWatermarkDetection = config.useWatermarkDetection;
+      this.configService.set('extraction.useWatermarkDetection', config.useWatermarkDetection);
+      
+      // Reinitialize watermark service if needed
+      if (this.useWatermarkDetection && !this.watermarkService) {
+        this.watermarkService = new WatermarkService({
+          debug: this.configService.get('debug', false),
+          minOccurrences: this.configService.get('extraction.watermarkMinOccurrences', 3),
+          pageOverlapThreshold: this.configService.get('extraction.watermarkPageOverlapThreshold', 0.5)
+        });
+      } else if (!this.useWatermarkDetection && this.watermarkService) {
+        this.watermarkService = null;
+      }
+    }
     
     // Update local config object
     this.extractionConfig = this.configService.getExtractionConfig();
@@ -932,6 +1351,17 @@ class EnhancedParsingService extends ParsingService {
       if (this.handwritingService) {
         await this.handwritingService.terminate();
         this.handwritingService = null;
+      }
+      
+      // Close watermark service
+      if (this.watermarkService) {
+        this.watermarkService = null;
+      }
+      
+      // Close telemetry service
+      if (this.telemetry) {
+        await this.telemetry.close();
+        this.telemetry = null;
       }
       
       // Clear any potential timers (defensive programming)

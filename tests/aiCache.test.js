@@ -418,6 +418,178 @@ describe('AICache', () => {
     });
   });
 
+  describe('Advanced LRU eviction', () => {
+    beforeEach(async () => {
+      mockFs.mkdir.mockResolvedValue();
+      mockFs.readFile.mockRejectedValue({ code: 'ENOENT' });
+      await cache.initialize();
+    });
+
+    it('should evict least recently used entries with access count weighting', async () => {
+      // Fill cache to max size
+      for (let i = 0; i < 10; i++) {
+        const hash = cache.generateHash(`text ${i}`);
+        await cache.set(hash, { data: `test ${i}` });
+      }
+      
+      // Access some entries multiple times to increase their access count
+      const hash1 = cache.generateHash('text 1');
+      const hash2 = cache.generateHash('text 2');
+      await cache.get(hash1); // Access count: 1
+      await cache.get(hash1); // Access count: 2
+      await cache.get(hash2); // Access count: 1
+      
+      // Add one more to trigger eviction
+      const hash = cache.generateHash('overflow text');
+      await cache.set(hash, { data: 'overflow' });
+      
+      // The least accessed entries should be evicted
+      expect(cache.memoryCache.size).toBeLessThanOrEqual(10);
+      expect(cache.stats.evictions).toBeGreaterThan(0);
+    });
+
+    it('should prioritize age over access count in eviction', async () => {
+      // Create entries with different ages and access counts
+      const oldHash = cache.generateHash('old text');
+      const newHash = cache.generateHash('new text');
+      
+      // Set old entry with high access count
+      cache.memoryCache.set(oldHash, {
+        data: { clientName: 'Old Corp' },
+        timestamp: Date.now() - 2000, // 2 seconds ago
+        accessCount: 10
+      });
+      
+      // Set new entry with low access count
+      cache.memoryCache.set(newHash, {
+        data: { clientName: 'New Corp' },
+        timestamp: Date.now(),
+        accessCount: 1
+      });
+      
+      // Trigger eviction
+      await cache.evictOldest();
+      
+      // Old entry should be evicted despite high access count
+      expect(cache.memoryCache.has(oldHash)).toBe(false);
+      expect(cache.memoryCache.has(newHash)).toBe(true);
+    });
+  });
+
+  describe('Compression and size optimization', () => {
+    beforeEach(async () => {
+      mockFs.mkdir.mockResolvedValue();
+      mockFs.readFile.mockRejectedValue({ code: 'ENOENT' });
+      await cache.initialize();
+    });
+
+    it('should compress data when compression is enabled', async () => {
+      const testData = {
+        clientName: 'Test Corporation',
+        clientConfidence: 0.95,
+        date: '2024-01-15',
+        dateConfidence: 0.90,
+        docType: 'Invoice',
+        docTypeConfidence: 0.98,
+        snippets: ['INVOICE #12345', 'Test Corporation'],
+        source: 'ai',
+        timestamp: '2024-01-15T10:30:00Z'
+      };
+      
+      const hash = cache.generateHash('test text');
+      await cache.set(hash, testData);
+      
+      const entry = cache.memoryCache.get(hash);
+      expect(entry.compressed).toBe(true);
+      expect(entry.size).toBeDefined();
+      expect(entry.size).toBeGreaterThan(0);
+    });
+
+    it('should decompress data when retrieving', async () => {
+      const testData = {
+        clientName: 'Test Corporation',
+        clientConfidence: 0.95,
+        date: '2024-01-15',
+        dateConfidence: 0.90,
+        docType: 'Invoice',
+        docTypeConfidence: 0.98,
+        snippets: ['INVOICE #12345', 'Test Corporation'],
+        source: 'ai',
+        timestamp: '2024-01-15T10:30:00Z'
+      };
+      
+      const hash = cache.generateHash('test text');
+      await cache.set(hash, testData);
+      
+      const retrieved = await cache.get(hash);
+      expect(retrieved).toEqual(testData);
+    });
+
+    it('should calculate data size correctly', () => {
+      const testData = { clientName: 'Test Corp', confidence: 0.9 };
+      const size = cache.calculateDataSize(testData);
+      
+      expect(size).toBeGreaterThan(0);
+      expect(typeof size).toBe('number');
+    });
+
+    it('should get total cache size', async () => {
+      const testData = { clientName: 'Test Corp', confidence: 0.9 };
+      const hash = cache.generateHash('test text');
+      await cache.set(hash, testData);
+      
+      const totalSize = cache.getTotalCacheSize();
+      expect(totalSize).toBeGreaterThan(0);
+      expect(typeof totalSize).toBe('number');
+    });
+  });
+
+  describe('Cache warming', () => {
+    beforeEach(async () => {
+      mockFs.mkdir.mockResolvedValue();
+      mockFs.readFile.mockRejectedValue({ code: 'ENOENT' });
+      await cache.initialize();
+    });
+
+    it('should warm cache with common patterns', async () => {
+      const commonPatterns = [
+        'INVOICE #12345',
+        'CONTRACT AGREEMENT',
+        'RECEIPT #67890',
+        'STATEMENT OF ACCOUNT'
+      ];
+      
+      await cache.warmCache(commonPatterns);
+      
+      // Check that patterns were added to cache
+      for (const pattern of commonPatterns) {
+        const hash = cache.generateHash(pattern);
+        const exists = await cache.has(hash);
+        expect(exists).toBe(true);
+      }
+      
+      const stats = cache.getStats();
+      expect(stats.size).toBe(4);
+    });
+
+    it('should not add duplicate patterns during warming', async () => {
+      const commonPatterns = ['INVOICE #12345'];
+      
+      // Warm cache twice with same patterns
+      await cache.warmCache(commonPatterns);
+      await cache.warmCache(commonPatterns);
+      
+      const stats = cache.getStats();
+      expect(stats.size).toBe(1); // Should only have one entry
+    });
+
+    it('should handle empty patterns array gracefully', async () => {
+      await expect(cache.warmCache([])).resolves.not.toThrow();
+      await expect(cache.warmCache(null)).resolves.not.toThrow();
+      await expect(cache.warmCache(undefined)).resolves.not.toThrow();
+    });
+  });
+
   describe('Integration tests', () => {
     beforeEach(async () => {
       mockFs.mkdir.mockResolvedValue();
@@ -480,6 +652,67 @@ describe('AICache', () => {
       const stats = cache.getStats();
       expect(stats.size).toBe(3);
       expect(stats.hits).toBe(3);
+    });
+
+    it('should maintain data integrity across compression/decompression cycles', async () => {
+      const complexData = {
+        clientName: 'Complex Corporation Inc.',
+        clientConfidence: 0.95,
+        date: '2024-01-15',
+        dateConfidence: 0.90,
+        docType: 'Invoice',
+        docTypeConfidence: 0.98,
+        snippets: [
+          'INVOICE #12345',
+          'Complex Corporation Inc.',
+          'Amount: $1,500.00',
+          'Due Date: 2024-02-15'
+        ],
+        source: 'ai',
+        timestamp: '2024-01-15T10:30:00Z',
+        metadata: {
+          extractedAt: '2024-01-15T10:30:00Z',
+          processingTime: 150,
+          model: 'gpt-3.5-turbo'
+        }
+      };
+      
+      const hash = cache.generateHash('complex document text');
+      await cache.set(hash, complexData);
+      
+      const retrieved = await cache.get(hash);
+      expect(retrieved).toEqual(complexData);
+    });
+
+    it('should handle cache performance under load', async () => {
+      const startTime = Date.now();
+      const operations = [];
+      
+      // Perform many cache operations (limited by max size)
+      for (let i = 0; i < 10; i++) {
+        const hash = cache.generateHash(`document ${i}`);
+        operations.push(cache.set(hash, { data: `test ${i}`, index: i }));
+      }
+      
+      await Promise.all(operations);
+      
+      const setTime = Date.now() - startTime;
+      
+      // Retrieve all data
+      const retrieveStart = Date.now();
+      for (let i = 0; i < 10; i++) {
+        const hash = cache.generateHash(`document ${i}`);
+        await cache.get(hash);
+      }
+      const retrieveTime = Date.now() - retrieveStart;
+      
+      // Performance should be reasonable (less than 1 second for 10 operations)
+      expect(setTime).toBeLessThan(1000);
+      expect(retrieveTime).toBeLessThan(1000);
+      
+      const stats = cache.getStats();
+      expect(stats.hits).toBe(10);
+      expect(stats.sets).toBe(10);
     });
   });
 });

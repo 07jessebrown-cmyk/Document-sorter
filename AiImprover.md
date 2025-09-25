@@ -80,46 +80,46 @@ This document provides a step-by-step execution plan to make the Document Sorter
 
 ### Phase 6 — Watermark Handling
 **6.1 Implement Watermark Detector**
-- [ ] Create `src/services/watermarkService.js`.
-- [ ] Detect repeated overlay text across multiple pages.
-- [ ] Write unit tests with watermark PDFs.
+- [x] Create `src/services/watermarkService.js`.
+- [x] Detect repeated overlay text across multiple pages.
+- [x] Write unit tests with watermark PDFs.
 
 **6.2 Filter Watermarks from Extraction**
-- [ ] Integrate watermark service into `enhancedParsingService`.
-- [ ] Strip watermark snippets before AI/regex analysis.
-- [ ] Add integration test confirming watermarks are excluded.
+- [x] Integrate watermark service into `enhancedParsingService`.
+- [x] Strip watermark snippets before AI/regex analysis.
+- [x] Add integration test confirming watermarks are excluded.
 
 ---
 
 ### Phase 7 — AI Enhancer Hardening
 **7.1 Improve aiTextService**
-- [ ] Enforce strict JSON schema for AI responses.
-- [ ] Add retries with exponential backoff for malformed responses.
-- [ ] Pass hints (language, table context) into LLM prompts.
-- [ ] Write unit tests with mocked AI responses.
+- [x] Enforce strict JSON schema for AI responses.
+- [x] Add retries with exponential backoff for malformed responses.
+- [x] Pass hints (language, table context) into LLM prompts.
+- [x] Write unit tests with mocked AI responses.
 
 **7.2 Merge Hybrid Results**
-- [ ] Implement merge logic: regex > table > AI fallback.
-- [ ] Ensure confidence scores are averaged/weighted.
-- [ ] Add integration test verifying merged results.
+- [x] Implement merge logic: regex > table > AI fallback.
+- [x] Ensure confidence scores are averaged/weighted.
+- [x] Add integration test verifying merged results.
 
 ---
 
 ### Phase 8 — Cache, Rate Limit, Telemetry
 **8.1 Implement Persistent AI Cache**
-- [ ] Create `src/services/aiCache.js`.
-- [ ] Add TTL + LRU logic for caching AI results.
-- [ ] Write unit tests for cache hit/miss scenarios.
+- [x] Create `src/services/aiCache.js`.
+- [x] Add TTL + LRU logic for caching AI results.
+- [x] Write unit tests for cache hit/miss scenarios.
 
 **8.2 Add LLM Throttling & Batching**
-- [ ] Implement concurrency control in `src/services/llmClient.js`.
-- [ ] Support batching of multiple document queries.
-- [ ] Write tests verifying concurrency limits.
+- [x] Implement concurrency control in `src/services/llmClient.js`.
+- [x] Support batching of multiple document queries.
+- [x] Write tests verifying concurrency limits.
 
 **8.3 Add Telemetry & Diagnostics**
-- [ ] Implement `src/services/telemetry.js` to log AI calls, cache hits/misses.
-- [ ] Create diagnostics UI to display telemetry in renderer.
-- [ ] Write tests ensuring telemetry logs AI service usage.
+- [x] Implement `src/services/telemetry.js` to log AI calls, cache hits/misses.
+- [x] Create diagnostics UI to display telemetry in renderer.
+- [x] Write tests ensuring telemetry logs AI service usage.
 
 ---
 
@@ -175,7 +175,7 @@ This document provides a step-by-step execution plan to make the Document Sorter
 3. [ ] Phase 3 OCR integration completed.  
 4. [ ] Phase 4 language detection completed.  
 5. [ ] Phase 5 signature/handwriting handling completed.  
-6. [ ] Phase 6 watermark detection completed.  
+6. [x] Phase 6 watermark detection completed.  
 7. [ ] Phase 7 AI enhancer hardened.  
 8. [ ] Phase 8 cache, throttling, telemetry implemented.  
 9. [ ] Phase 9 tests & CI green.  

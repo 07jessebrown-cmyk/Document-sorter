@@ -2,6 +2,36 @@ const https = require('https');
 const { URL } = require('url');
 
 /**
+ * Semaphore class for concurrency control
+ */
+class Semaphore {
+  constructor(permits) {
+    this.permits = permits;
+    this.waiting = [];
+  }
+
+  async acquire() {
+    return new Promise((resolve) => {
+      if (this.permits > 0) {
+        this.permits--;
+        resolve();
+      } else {
+        this.waiting.push(resolve);
+      }
+    });
+  }
+
+  release() {
+    this.permits++;
+    if (this.waiting.length > 0) {
+      const resolve = this.waiting.shift();
+      this.permits--;
+      resolve();
+    }
+  }
+}
+
+/**
  * LLM Client Wrapper for AI Text Service
  * Provides a unified interface for calling various LLM providers
  * with retry logic, error handling, and mock mode support
@@ -16,6 +46,17 @@ class LLMClient {
     this.retryDelay = options.retryDelay || 1000; // Base delay in ms
     this.maxDelay = options.maxDelay || 10000; // Max delay in ms
     this.timeout = options.timeout || 30000; // Request timeout in ms
+    
+    // Concurrency control
+    this.maxConcurrentRequests = options.maxConcurrentRequests || 3;
+    this.requestQueue = [];
+    this.activeRequests = 0;
+    this.requestSemaphore = new Semaphore(this.maxConcurrentRequests);
+    
+    // Batching configuration
+    this.batchSize = options.batchSize || 5;
+    this.batchDelay = options.batchDelay || 100; // Delay between batches in ms
+    this.batchTimeout = options.batchTimeout || 2000; // Max time to wait for batch to fill
     
     // Mock mode for testing
     this.mockMode = process.env.NODE_ENV === 'test' || options.mockMode === true;
@@ -41,6 +82,7 @@ class LLMClient {
    * @param {number} [params.presencePenalty=0] - Presence penalty (-2 to 2)
    * @param {string} [params.stop] - Stop sequence
    * @param {boolean} [params.stream=false] - Whether to stream the response
+   * @param {boolean} [params.bypassConcurrency=false] - Whether to bypass concurrency control
    * @returns {Promise<Object>} LLM response object
    */
   async callLLM(params) {
@@ -53,7 +95,8 @@ class LLMClient {
       frequencyPenalty = 0,
       presencePenalty = 0,
       stop = null,
-      stream = false
+      stream = false,
+      bypassConcurrency = false
     } = params;
 
     // Validate required parameters
@@ -98,8 +141,203 @@ class LLMClient {
       payload.stop = stop;
     }
 
-    // Make the API call with retry logic
-    return await this.makeAPICallWithRetry(payload);
+    // Apply concurrency control unless bypassed
+    if (bypassConcurrency) {
+      return await this.makeAPICallWithRetry(payload);
+    } else {
+      return await this.callWithConcurrencyControl(payload);
+    }
+  }
+
+  /**
+   * Call LLM with concurrency control using semaphore
+   * @param {Object} payload - Request payload
+   * @returns {Promise<Object>} LLM response object
+   * @private
+   */
+  async callWithConcurrencyControl(payload) {
+    // Acquire semaphore permit
+    await this.requestSemaphore.acquire();
+    
+    try {
+      this.activeRequests++;
+      
+      // Track concurrency metrics
+      if (this.telemetry) {
+        this.telemetry.trackConcurrency({
+          activeRequests: this.activeRequests,
+          maxConcurrent: this.maxConcurrentRequests,
+          queueLength: this.requestQueue.length
+        });
+      }
+      
+      return await this.makeAPICallWithRetry(payload);
+    } finally {
+      this.activeRequests--;
+      this.requestSemaphore.release();
+    }
+  }
+
+  /**
+   * Call multiple LLM requests in batch with concurrency control
+   * @param {Array<Object>} requests - Array of request objects
+   * @param {Object} options - Batch options
+   * @param {number} [options.concurrency] - Max concurrent requests (defaults to maxConcurrentRequests)
+   * @param {number} [options.batchDelay] - Delay between batches in ms
+   * @returns {Promise<Array<Object>>} Array of response objects
+   */
+  async callLLMBatch(requests, options = {}) {
+    const { 
+      concurrency = this.maxConcurrentRequests,
+      batchDelay = this.batchDelay 
+    } = options;
+
+    if (!Array.isArray(requests) || requests.length === 0) {
+      return [];
+    }
+
+    // Validate all requests
+    for (let i = 0; i < requests.length; i++) {
+      const request = requests[i];
+      if (!request.messages || !Array.isArray(request.messages)) {
+        throw new Error(`Request ${i} is missing required messages array`);
+      }
+    }
+
+    const results = [];
+    const tempSemaphore = new Semaphore(concurrency);
+
+    // Process requests in batches
+    for (let i = 0; i < requests.length; i += this.batchSize) {
+      const batch = requests.slice(i, i + this.batchSize);
+      
+      const batchPromises = batch.map(async (request, index) => {
+        await tempSemaphore.acquire();
+        
+        try {
+          const result = await this.callLLM({ ...request, bypassConcurrency: true });
+          return {
+            index: i + index,
+            result: result,
+            success: true
+          };
+        } catch (error) {
+          console.error(`Batch request ${i + index} failed:`, error.message);
+          return {
+            index: i + index,
+            result: null,
+            success: false,
+            error: error.message
+          };
+        } finally {
+          tempSemaphore.release();
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+
+      // Add delay between batches if not the last batch
+      if (i + this.batchSize < requests.length) {
+        await this.delay(batchDelay);
+      }
+    }
+
+    // Sort results by original index and return only the results
+    return results
+      .sort((a, b) => a.index - b.index)
+      .map(item => item.result);
+  }
+
+  /**
+   * Call LLM with intelligent batching - groups similar requests
+   * @param {Array<Object>} requests - Array of request objects
+   * @param {Object} options - Batching options
+   * @param {Function} [options.groupBy] - Function to group requests by similarity
+   * @param {number} [options.maxBatchSize] - Maximum batch size
+   * @returns {Promise<Array<Object>>} Array of response objects
+   */
+  async callLLMIntelligentBatch(requests, options = {}) {
+    const { 
+      groupBy = (req) => req.model || this.defaultModel,
+      maxBatchSize = this.batchSize
+    } = options;
+
+    if (!Array.isArray(requests) || requests.length === 0) {
+      return [];
+    }
+
+    // Group requests by similarity (e.g., by model)
+    const groups = new Map();
+    requests.forEach((request, index) => {
+      const key = groupBy(request);
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key).push({ ...request, originalIndex: index });
+    });
+
+    const results = new Array(requests.length);
+
+    // Process each group
+    for (const [groupKey, groupRequests] of groups) {
+      // Split large groups into smaller batches
+      for (let i = 0; i < groupRequests.length; i += maxBatchSize) {
+        const batch = groupRequests.slice(i, i + maxBatchSize);
+        
+        try {
+          const batchResults = await this.callLLMBatch(batch, options);
+          
+          // Map results back to original indices
+          batch.forEach((request, batchIndex) => {
+            results[request.originalIndex] = batchResults[batchIndex];
+          });
+        } catch (error) {
+          console.error(`Intelligent batch processing failed for group ${groupKey}:`, error.message);
+          
+          // Mark all requests in this batch as failed
+          batch.forEach(request => {
+            results[request.originalIndex] = null;
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get current concurrency statistics
+   * @returns {Object} Concurrency statistics
+   */
+  getConcurrencyStats() {
+    return {
+      activeRequests: this.activeRequests,
+      maxConcurrentRequests: this.maxConcurrentRequests,
+      queueLength: this.requestQueue.length,
+      availablePermits: this.requestSemaphore.permits,
+      utilizationRate: this.activeRequests / this.maxConcurrentRequests
+    };
+  }
+
+  /**
+   * Update concurrency settings
+   * @param {Object} settings - New concurrency settings
+   */
+  updateConcurrencySettings(settings) {
+    if (settings.maxConcurrentRequests !== undefined) {
+      this.maxConcurrentRequests = Math.max(1, settings.maxConcurrentRequests);
+      this.requestSemaphore = new Semaphore(this.maxConcurrentRequests);
+    }
+    if (settings.batchSize !== undefined) {
+      this.batchSize = Math.max(1, settings.batchSize);
+    }
+    if (settings.batchDelay !== undefined) {
+      this.batchDelay = Math.max(0, settings.batchDelay);
+    }
+    if (settings.batchTimeout !== undefined) {
+      this.batchTimeout = Math.max(100, settings.batchTimeout);
+    }
   }
 
   /**
@@ -359,7 +597,17 @@ class LLMClient {
       retryDelay: this.retryDelay,
       maxDelay: this.maxDelay,
       timeout: this.timeout,
-      mockMode: this.mockMode
+      mockMode: this.mockMode,
+      concurrency: {
+        maxConcurrentRequests: this.maxConcurrentRequests,
+        activeRequests: this.activeRequests,
+        availablePermits: this.requestSemaphore.permits
+      },
+      batching: {
+        batchSize: this.batchSize,
+        batchDelay: this.batchDelay,
+        batchTimeout: this.batchTimeout
+      }
     };
   }
 
@@ -384,6 +632,20 @@ class LLMClient {
     if (config.maxDelay !== undefined) this.maxDelay = config.maxDelay;
     if (config.timeout !== undefined) this.timeout = config.timeout;
     if (config.mockMode !== undefined) this.mockMode = config.mockMode;
+    
+    // Update concurrency settings
+    if (config.maxConcurrentRequests !== undefined) {
+      this.updateConcurrencySettings({ maxConcurrentRequests: config.maxConcurrentRequests });
+    }
+    if (config.batchSize !== undefined) {
+      this.updateConcurrencySettings({ batchSize: config.batchSize });
+    }
+    if (config.batchDelay !== undefined) {
+      this.updateConcurrencySettings({ batchDelay: config.batchDelay });
+    }
+    if (config.batchTimeout !== undefined) {
+      this.updateConcurrencySettings({ batchTimeout: config.batchTimeout });
+    }
   }
 }
 
