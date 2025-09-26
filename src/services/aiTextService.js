@@ -718,6 +718,30 @@ class AITextService {
       hasCache: this.cache !== null
     };
   }
+
+  /**
+   * Close the service and clean up resources
+   * @returns {Promise<void>}
+   */
+  async close() {
+    this.isEnabled = false;
+    
+    // Close LLM client if it exists
+    if (this.llmClient && typeof this.llmClient.close === 'function') {
+      await this.llmClient.close();
+    }
+    
+    // Close cache if it exists
+    if (this.cache && typeof this.cache.close === 'function') {
+      await this.cache.close();
+    }
+    
+    // Clear references
+    this.llmClient = null;
+    this.cache = null;
+    
+    console.log('🔒 AI Text Service closed');
+  }
 }
 
 module.exports = AITextService;

@@ -45,15 +45,26 @@ class SignatureDetector {
     this.cache = new Map();
     this.cacheTimestamps = new Map();
 
-    // Cache cleanup interval
-    this.cacheCleanupInterval = setInterval(() => {
-      this.cleanupCache();
-    }, this.options.cacheTTL);
+    // Cache cleanup interval will be set up in initialize() method
+    this.cacheCleanupInterval = null;
 
     // Initialize signature patterns
     this.initializePatterns();
 
     this.log('SignatureDetector initialized');
+  }
+
+  /**
+   * Initialize the signature detector
+   * @returns {Promise<void>}
+   */
+  async initialize() {
+    // Set up cache cleanup interval only if not already set
+    if (!this.cacheCleanupInterval) {
+      this.cacheCleanupInterval = setInterval(() => {
+        this.cleanupCache();
+      }, this.options.cacheTTL);
+    }
   }
 
   /**
@@ -520,8 +531,39 @@ class SignatureDetector {
       // Reset statistics
       this.resetStats();
       
+      // Clear any pending operations
+      this.pendingDetections = new Map();
+      
     } catch (error) {
       console.warn('Error during SignatureDetector cleanup:', error.message);
+    }
+  }
+
+  /**
+   * Shutdown method for test cleanup and production shutdown
+   * @returns {Promise<void>}
+   */
+  async shutdown() {
+    try {
+      // Clear the cache cleanup interval
+      if (this.cacheCleanupInterval) {
+        clearInterval(this.cacheCleanupInterval);
+        this.cacheCleanupInterval = null;
+      }
+      
+      // Clear cache
+      this.clearCache();
+      
+      // Reset statistics
+      this.resetStats();
+      
+      // Clear any pending operations
+      this.pendingDetections = new Map();
+      
+      this.log('SignatureDetector shutdown complete');
+      
+    } catch (error) {
+      console.warn('Error during SignatureDetector shutdown:', error.message);
     }
   }
 }

@@ -139,8 +139,17 @@ class LanguageService {
       'glg': 'Galician'
     };
 
-    // Clean up cache periodically
-    if (this.options.enableCache) {
+    // Cache cleanup interval will be set up in initialize() method
+    this.cacheCleanupInterval = null;
+  }
+
+  /**
+   * Initialize the language service
+   * @returns {Promise<void>}
+   */
+  async initialize() {
+    // Set up cache cleanup interval if caching is enabled
+    if (this.options.enableCache && !this.cacheCleanupInterval) {
       this.cacheCleanupInterval = setInterval(() => this.cleanupCache(), this.options.cacheTTL);
     }
   }
@@ -545,17 +554,40 @@ class LanguageService {
       // Reset statistics
       this.resetStats();
       
+      // Clear any pending promises
+      this.pendingDetections = new Map();
+      
     } catch (error) {
       console.warn('Error during LanguageService close:', error.message);
     }
   }
 
   /**
-   * Shutdown method for test cleanup
+   * Shutdown method for test cleanup and production shutdown
    * @returns {Promise<void>}
    */
   async shutdown() {
-    await this.close();
+    try {
+      // Clear the cache cleanup interval
+      if (this.cacheCleanupInterval) {
+        clearInterval(this.cacheCleanupInterval);
+        this.cacheCleanupInterval = null;
+      }
+      
+      // Clear cache
+      this.clearCache();
+      
+      // Reset statistics
+      this.resetStats();
+      
+      // Clear any pending promises
+      this.pendingDetections = new Map();
+      
+      this.log('LanguageService shutdown complete');
+      
+    } catch (error) {
+      console.warn('Error during LanguageService shutdown:', error.message);
+    }
   }
 }
 

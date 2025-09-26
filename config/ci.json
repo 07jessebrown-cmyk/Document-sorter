@@ -1,0 +1,66 @@
+{
+  "ai": {
+    "enabled": false,
+    "mockMode": true,
+    "mockResponses": {
+      "documentAnalysis": {
+        "title": "Mock Document Title",
+        "confidence": 0.95,
+        "source": "ai-mock",
+        "fields": {
+          "documentType": "Invoice",
+          "date": "2024-01-15",
+          "amount": "$1,234.56",
+          "vendor": "Mock Vendor Inc."
+        }
+      },
+      "tableExtraction": {
+        "tables": [
+          {
+            "rows": 3,
+            "columns": 4,
+            "data": [
+              ["Item", "Quantity", "Price", "Total"],
+              ["Widget A", "2", "$10.00", "$20.00"],
+              ["Widget B", "1", "$15.00", "$15.00"]
+            ]
+          }
+        ]
+      },
+      "languageDetection": {
+        "language": "en",
+        "confidence": 0.98
+      },
+      "signatureDetection": {
+        "hasSignature": true,
+        "confidence": 0.87,
+        "location": "bottom-right"
+      },
+      "watermarkDetection": {
+        "hasWatermark": false,
+        "confidence": 0.99
+      },
+      "handwritingDetection": {
+        "hasHandwriting": false,
+        "confidence": 0.95
+      }
+    }
+  },
+  "ocr": {
+    "enabled": true,
+    "mockMode": true
+  },
+  "tableExtraction": {
+    "enabled": true,
+    "mockMode": true
+  },
+  "telemetry": {
+    "enabled": false,
+    "mockMode": true
+  },
+  "cache": {
+    "enabled": true,
+    "mockMode": true,
+    "ttl": 300
+  }
+}

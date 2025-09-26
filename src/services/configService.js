@@ -10,7 +10,9 @@ const path = require('path');
 class ConfigService {
   constructor() {
     this.config = null;
-    this.configPath = path.join(__dirname, '../../config/default.json');
+    // Use CI config in CI environment, otherwise use default
+    const configFile = process.env.CI === 'true' ? 'ci.json' : 'default.json';
+    this.configPath = path.join(__dirname, '../../config', configFile);
     this.loadConfig();
   }
 

@@ -1,0 +1,88 @@
+{
+  "canaryRollout": {
+    "enabled": true,
+    "version": "1.0.0",
+    "features": {
+      "aiExtraction": {
+        "enabled": false,
+        "rolloutPercentage": 0,
+        "betaUsers": [],
+        "stableUsers": [],
+        "blacklistedUsers": [],
+        "rolloutStrategy": "gradual",
+        "minStableTime": 604800000,
+        "maxErrorRate": 0.05,
+        "minSuccessRate": 0.95
+      },
+      "ocrFallback": {
+        "enabled": false,
+        "rolloutPercentage": 0,
+        "betaUsers": [],
+        "stableUsers": [],
+        "blacklistedUsers": [],
+        "rolloutStrategy": "gradual",
+        "minStableTime": 259200000,
+        "maxErrorRate": 0.03,
+        "minSuccessRate": 0.97
+      },
+      "tableExtraction": {
+        "enabled": false,
+        "rolloutPercentage": 0,
+        "betaUsers": [],
+        "stableUsers": [],
+        "blacklistedUsers": [],
+        "rolloutStrategy": "gradual",
+        "minStableTime": 432000000,
+        "maxErrorRate": 0.04,
+        "minSuccessRate": 0.96
+      },
+      "handwritingDetection": {
+        "enabled": false,
+        "rolloutPercentage": 0,
+        "betaUsers": [],
+        "stableUsers": [],
+        "blacklistedUsers": [],
+        "rolloutStrategy": "gradual",
+        "minStableTime": 345600000,
+        "maxErrorRate": 0.06,
+        "minSuccessRate": 0.94
+      },
+      "watermarkDetection": {
+        "enabled": false,
+        "rolloutPercentage": 0,
+        "betaUsers": [],
+        "stableUsers": [],
+        "blacklistedUsers": [],
+        "rolloutStrategy": "gradual",
+        "minStableTime": 172800000,
+        "maxErrorRate": 0.02,
+        "minSuccessRate": 0.98
+      }
+    },
+    "globalSettings": {
+      "enableTelemetry": true,
+      "enableErrorReporting": true,
+      "enablePerformanceMonitoring": true,
+      "autoRollback": true,
+      "rollbackThreshold": 0.1,
+      "monitoringInterval": 300000,
+      "maxRolloutPercentage": 50
+    }
+  },
+  "betaUsers": {
+    "enabled": true,
+    "maxUsers": 100,
+    "registrationEnabled": true,
+    "feedbackEnabled": true
+  },
+  "rolloutMonitoring": {
+    "enabled": true,
+    "alertThresholds": {
+      "errorRate": 0.05,
+      "latency": 5000,
+      "memoryUsage": 512,
+      "cpuUsage": 80
+    },
+    "reportingInterval": 300000
+  }
+}

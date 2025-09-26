@@ -647,6 +647,28 @@ class LLMClient {
       this.updateConcurrencySettings({ batchTimeout: config.batchTimeout });
     }
   }
+
+  /**
+   * Close the service and clean up resources
+   * @returns {Promise<void>}
+   */
+  async close() {
+    // Clear any pending operations
+    this.waiting = [];
+    this.permits = 0;
+    
+    // Clear any pending batches
+    if (this.batchTimeout) {
+      clearTimeout(this.batchTimeout);
+      this.batchTimeout = null;
+    }
+    
+    // Clear any pending operations
+    this.pendingOperations = [];
+    this.currentBatch = [];
+    
+    console.log('🔒 LLM Client closed');
+  }
 }
 
 module.exports = LLMClient;

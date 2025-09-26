@@ -9,6 +9,9 @@ const LanguageService = require('./langService');
 const HandwritingService = require('./handwritingService');
 const WatermarkService = require('./watermarkService');
 const TelemetryService = require('./telemetryService');
+const CanaryRolloutService = require('./canaryRolloutService');
+const RolloutMonitoringService = require('./rolloutMonitoringService');
+const BetaUserService = require('./betaUserService');
 const { buildMetadataPrompt } = require('./ai_prompts');
 
 /**
@@ -116,12 +119,31 @@ class EnhancedParsingService extends ParsingService {
     // Initialize telemetry service
     this.initializeTelemetry();
     
+    // Initialize canary rollout services
+    this.initializeCanaryRollout();
+    
     // Initialize AI services if enabled (but don't fail if initialization fails)
     if (this.useAI) {
       this.initializeAIServices().catch(error => {
         console.warn('AI services initialization failed, but keeping useAI enabled:', error.message);
       });
     }
+  }
+
+  /**
+   * Check if a feature is enabled for the current user
+   * @param {string} featureName - Feature name
+   * @param {string} userId - User ID (optional, defaults to system user)
+   * @returns {boolean} True if feature is enabled
+   */
+  isFeatureEnabledForUser(featureName, userId = 'system') {
+    // Check canary rollout service first
+    if (this.canaryRolloutService && this.canaryRolloutService.isInitialized) {
+      return this.canaryRolloutService.isFeatureEnabledForUser(userId, featureName);
+    }
+    
+    // Fallback to config service
+    return this.configService.get(`extraction.${featureName}`, false);
   }
 
   /**
@@ -135,7 +157,7 @@ class EnhancedParsingService extends ParsingService {
       const text = await super.extractText(filePath);
       
       // If text extraction returns empty or very short text, try OCR fallback
-      if (this.useOCR && this.ocrService && (!text || text.trim().length < 50)) {
+      if (this.isFeatureEnabledForUser('useOCR') && this.ocrService && (!text || text.trim().length < 50)) {
         console.log(`📷 PDF appears to be image-based, attempting OCR fallback for: ${filePath}`);
         
         try {
@@ -183,6 +205,47 @@ class EnhancedParsingService extends ParsingService {
     } catch (error) {
       console.warn('Failed to initialize telemetry service:', error.message);
       this.telemetry = null;
+    }
+  }
+
+  /**
+   * Initialize canary rollout services
+   * @returns {void}
+   */
+  initializeCanaryRollout() {
+    try {
+      // Initialize canary rollout service
+      this.canaryRolloutService = new CanaryRolloutService({
+        enabled: this.configService.get('canaryRollout.enabled', true)
+      });
+      
+      // Initialize beta user service
+      this.betaUserService = new BetaUserService({
+        enabled: this.configService.get('betaUsers.enabled', true)
+      });
+      
+      // Initialize rollout monitoring service
+      this.rolloutMonitoringService = new RolloutMonitoringService({
+        enabled: this.configService.get('rolloutMonitoring.enabled', true),
+        canaryService: this.canaryRolloutService,
+        telemetryService: this.telemetryService
+      });
+      
+      // Initialize services asynchronously
+      Promise.all([
+        this.canaryRolloutService.initialize(),
+        this.betaUserService.initialize(),
+        this.rolloutMonitoringService.initialize()
+      ]).catch(error => {
+        console.warn('Canary rollout services initialization failed:', error.message);
+      });
+      
+      console.log('🎯 Canary rollout services initialized');
+    } catch (error) {
+      console.warn('Failed to initialize canary rollout services:', error.message);
+      this.canaryRolloutService = null;
+      this.betaUserService = null;
+      this.rolloutMonitoringService = null;
     }
   }
 

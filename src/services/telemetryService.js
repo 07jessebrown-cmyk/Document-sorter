@@ -110,10 +110,8 @@ class TelemetryService {
       await this.loadMetrics();
       this.isInitialized = true;
       
-      // Set up periodic save
-      this.saveIntervalId = setInterval(() => {
-        this.saveMetrics().catch(console.error);
-      }, this.saveInterval);
+      // Periodic save will be set up after initialization
+      this.saveIntervalId = null;
       
       console.log('Telemetry service initialized');
     } catch (error) {

@@ -1,0 +1,56 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check for TODO/FIXME comments
+        run: |
+          echo "Checking for TODO/FIXME comments..."
+          if grep -r "TODO\|FIXME" src/ --exclude-dir=node_modules; then
+            echo "Found TODO/FIXME comments. Consider addressing them."
+            exit 0  # Don't fail the build, just warn
+          else
+            echo "No TODO/FIXME comments found."
+          fi
+
+      - name: Check for console.log statements
+        run: |
+          echo "Checking for console.log statements..."
+          if grep -r "console\.log" src/ --exclude-dir=node_modules; then
+            echo "Found console.log statements. Consider removing them for production."
+            exit 0  # Don't fail the build, just warn
+          else
+            echo "No console.log statements found."
+          fi
+
+      - name: Security audit
+        run: npm audit --audit-level moderate
+
+      - name: Check for large files
+        run: |
+          echo "Checking for large files..."
+          find . -type f -size +1M -not -path "./node_modules/*" -not -path "./.git/*" -not -path "./dist/*" -not -path "./coverage/*" | head -10

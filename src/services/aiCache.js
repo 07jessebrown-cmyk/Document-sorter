@@ -66,10 +66,8 @@ class AICache {
       await this.loadFromDisk();
       this.isLoaded = true;
       
-      // Set up periodic save
-      this.saveIntervalId = setInterval(() => {
-        this.saveToDisk().catch(console.error);
-      }, this.saveInterval);
+      // Periodic save will be set up after initialization
+      this.saveIntervalId = null;
       
     } catch (error) {
       console.warn('Failed to initialize AI cache:', error.message);

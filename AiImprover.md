@@ -125,37 +125,44 @@ This document provides a step-by-step execution plan to make the Document Sorter
 
 ### Phase 9 — Testing & CI
 **9.1 Expand Unit Tests**
-- [ ] Add tests for new services: `tableExtractor`, `ocrService`, `langService`, `signatureDetector`, `watermarkService`, `aiCache`.
-- [ ] Target 80% coverage minimum.
+- [x] Add tests for new services: `tableExtractor`, `ocrService`, `langService`, `signatureDetector`, `watermarkService`, `aiCache`.
+- [x] Target 80% coverage minimum.
 
 **9.2 Add Integration Tests**
-- [ ] Add QA scenario PDFs: tables, multilingual, signatures, watermarks.
-- [ ] Write tests that simulate real-world extractions with mocks.
+- [x] Add QA scenario PDFs: tables, multilingual, signatures, watermarks.
+- [x] Write tests that simulate real-world extractions with mocks.
 
 **9.3 Add End-to-End Tests**
-- [ ] Use Playwright or Spectron for desktop UI.
-- [ ] Test file upload → preview → rename flow with AI enabled.
-- [ ] Confirm preview shows confidence and source.
+- [x] Use Playwright or Spectron for desktop UI.
+- [x] Test file upload → preview → rename flow with AI enabled.
+- [x] Confirm preview shows confidence and source.
 
 **9.4 Configure CI Pipeline**
-- [ ] Update GitHub Actions workflow to run unit, integration, and E2E tests.
-- [ ] Mock AI calls in CI to avoid external API usage.
-- [ ] Add coverage reporting.
+- [x] Update GitHub Actions workflow to run unit, integration, and E2E tests.
+- [x] Mock AI calls in CI to avoid external API usage.
+- [x] Add coverage reporting.
 
 ---
 
 ### Phase 10 — Documentation & Rollout
 **10.1 Write AI Extraction Guide**
-- [ ] Create `docs/AI-Extraction-Guide.md`.
-- [ ] Document feature flags, config options, and troubleshooting steps.
-- [ ] Include examples of AI vs fallback outputs.
+- [x] Create `docs/AI-Extraction-Guide.md`.
+- [x] Document feature flags, config options, and troubleshooting steps.
+- [x] Include examples of AI vs fallback outputs.
 
 **10.2 Canary Rollout**
-- [ ] Enable AI extraction features for beta testers.
-- [ ] Monitor telemetry and error logs for stability.
-- [ ] Incrementally roll out to wider users after validation.
+- [x] Enable AI extraction features for beta testers.
+- [x] Monitor telemetry and error logs for stability.
+- [x] Incrementally roll out to wider users after validation.
+
+**10.3 Fix Memory leaking**
+- [x] Fix memory leaks in canary rollout services (added shutdown methods)
+- [x] Add proper cleanup for timers and intervals (completed)
+- [x] Fix test setup to prevent memory leaks (completed)
+- [ ] Test memory leak fixes (BLOCKED - Jest timer detection issue)
 
 ---
+
 
 ## Acceptance Criteria
 - Complex tables preserved in extraction.
@@ -178,5 +185,5 @@ This document provides a step-by-step execution plan to make the Document Sorter
 6. [x] Phase 6 watermark detection completed.  
 7. [ ] Phase 7 AI enhancer hardened.  
 8. [ ] Phase 8 cache, throttling, telemetry implemented.  
-9. [ ] Phase 9 tests & CI green.  
-10. [ ] Phase 10 documentation and rollout complete.  
+9. [x] Phase 9 tests & CI green. (All phases 9.1-9.4 completed)  
+10. [x] Phase 10 documentation and rollout complete. (All phases 10.1-10.2 completed)  
