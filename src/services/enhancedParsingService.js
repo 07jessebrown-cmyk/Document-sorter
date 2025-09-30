@@ -30,7 +30,7 @@ class EnhancedParsingService extends ParsingService {
     super();
     
     // Initialize configuration service
-    this.configService = new ConfigService();
+    this.configService = options.configService || new ConfigService();
     
     // AI Configuration - prioritize options over config over environment variables
     this.useAI = options.useAI !== undefined 
@@ -819,24 +819,26 @@ class EnhancedParsingService extends ParsingService {
     }
 
     try {
-      // Check cache first
-      const cacheKey = this.aiCache.generateHash(text);
-      const cachedResult = await this.aiCache.get(cacheKey);
-      
-      if (cachedResult) {
-        this.stats.cacheHits++;
-        console.log(`📦 Cache hit for: ${filePath}`);
+      // Check cache first (unless forceRefresh is true)
+      if (!options.forceRefresh) {
+        const cacheKey = this.aiCache.generateHash(text);
+        const cachedResult = await this.aiCache.get(cacheKey, { forceRefresh: options.forceRefresh });
         
-        // Track cache hit
-        if (this.telemetry) {
-          try {
-            this.telemetry.trackCachePerformance({ hit: true, size: this.aiCache.memoryCache?.size || 0 });
-          } catch (telemetryError) {
-            console.warn('Telemetry cache tracking failed:', telemetryError.message);
+        if (cachedResult) {
+          this.stats.cacheHits++;
+          console.log(`📦 Cache hit for: ${filePath}`);
+          
+          // Track cache hit
+          if (this.telemetry) {
+            try {
+              this.telemetry.trackCachePerformance({ hit: true, size: this.aiCache.memoryCache?.size || 0 });
+            } catch (telemetryError) {
+              console.warn('Telemetry cache tracking failed:', telemetryError.message);
+            }
           }
+          
+          return this.formatAIResult(cachedResult, 'ai-cached');
         }
-        
-        return this.formatAIResult(cachedResult, 'ai-cached');
       }
       
       this.stats.cacheMisses++;
@@ -856,11 +858,13 @@ class EnhancedParsingService extends ParsingService {
         temperature: options.temperature || 0.1,
         maxTokens: options.maxTokens || 500,
         detectedLanguage: options.detectedLanguage,
-        languageName: options.languageName
+        languageName: options.languageName,
+        forceRefresh: options.forceRefresh || false
       });
       
       if (aiResult) {
         // Cache the result
+        const cacheKey = this.aiCache.generateHash(text);
         await this.aiCache.set(cacheKey, aiResult);
         
         // Track cache set
@@ -1423,8 +1427,26 @@ class EnhancedParsingService extends ParsingService {
       
       // Close telemetry service
       if (this.telemetry) {
-        await this.telemetry.close();
+        await this.telemetry.shutdown();
         this.telemetry = null;
+      }
+      
+      // Close canary rollout service
+      if (this.canaryRolloutService) {
+        await this.canaryRolloutService.shutdown();
+        this.canaryRolloutService = null;
+      }
+      
+      // Close beta user service
+      if (this.betaUserService) {
+        await this.betaUserService.shutdown();
+        this.betaUserService = null;
+      }
+      
+      // Close rollout monitoring service
+      if (this.rolloutMonitoringService) {
+        await this.rolloutMonitoringService.shutdown();
+        this.rolloutMonitoringService = null;
       }
       
       // Clear any potential timers (defensive programming)

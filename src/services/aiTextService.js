@@ -742,6 +742,14 @@ class AITextService {
     
     console.log('🔒 AI Text Service closed');
   }
+
+  /**
+   * Shutdown method for test cleanup
+   * @returns {Promise<void>}
+   */
+  async shutdown() {
+    await this.close();
+  }
 }
 
 module.exports = AITextService;

@@ -25,6 +25,142 @@ jest.mock('fs', () => ({
   }
 }));
 
+// Mock ConfigService with comprehensive configuration
+jest.mock('../src/services/configService', () => {
+  return jest.fn().mockImplementation(() => ({
+    get: jest.fn().mockImplementation((key, defaultValue) => {
+      const configMap = {
+        'ai.enabled': true,
+        'ai.confidenceThreshold': 0.5,
+        'ai.batchSize': 5,
+        'ai.timeout': 30000,
+        'debug': false,
+        'extraction.tableTimeout': 30000,
+        'extraction.ocrLanguage': 'eng',
+        'extraction.ocrWorkerPoolSize': 2,
+        'language.minConfidence': 0.1,
+        'language.fallbackLanguage': 'eng',
+        'extraction.handwritingLanguage': 'eng',
+        'extraction.handwritingWorkerPoolSize': 1,
+        'extraction.watermarkMinOccurrences': 3,
+        'extraction.watermarkPageOverlapThreshold': 0.5,
+        'telemetry.enabled': false,
+        'telemetry.logDir': undefined,
+        'telemetry.maxLogSize': 10485760,
+        'telemetry.retentionDays': 30,
+        'canaryRollout.enabled': false,
+        'betaUsers.enabled': false,
+        'rolloutMonitoring.enabled': false
+      };
+      return configMap[key] !== undefined ? configMap[key] : defaultValue;
+    }),
+    getExtractionConfig: jest.fn().mockReturnValue({
+      useOCR: false,
+      useTableExtraction: false,
+      useLLMEnhancer: false,
+      useHandwritingDetection: false,
+      useWatermarkDetection: false
+    }),
+    set: jest.fn(),
+    save: jest.fn().mockResolvedValue(true)
+  }));
+});
+
+// Mock AI Cache - always return null to force AI processing
+jest.mock('../src/services/aiCache', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(),
+    clear: jest.fn().mockResolvedValue(),
+    get: jest.fn().mockResolvedValue(null), // Always return null
+    set: jest.fn().mockResolvedValue(),
+    generateHash: jest.fn().mockReturnValue('mock-hash'),
+    close: jest.fn().mockResolvedValue(),
+    shutdown: jest.fn().mockResolvedValue(),
+    getStats: jest.fn().mockReturnValue({ size: 0, hits: 0, misses: 0 })
+  }));
+});
+
+// Mock AI Text Service
+jest.mock('../src/services/aiTextService', () => {
+  return jest.fn().mockImplementation(() => ({
+    extractMetadataAI: jest.fn().mockResolvedValue({
+      clientName: 'Corporación Acme',
+      clientConfidence: 0.9,
+      date: '2023-12-15',
+      dateConfidence: 0.8,
+      docType: 'Invoice',
+      docTypeConfidence: 0.9,
+      snippets: ['FACTURA', 'Cliente: Corporación Acme'],
+      source: 'AI'
+    }),
+    setLLMClient: jest.fn(),
+    setCache: jest.fn(),
+    setTelemetry: jest.fn(),
+    shutdown: jest.fn().mockResolvedValue()
+  }));
+});
+
+// Mock LLM Client
+jest.mock('../src/services/llmClient', () => {
+  return jest.fn().mockImplementation(() => ({
+    setTelemetry: jest.fn(),
+    shutdown: jest.fn().mockResolvedValue()
+  }));
+});
+
+// Mock Telemetry Service
+jest.mock('../src/services/telemetryService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(),
+    close: jest.fn().mockResolvedValue(),
+    trackFileProcessing: jest.fn(),
+    trackCachePerformance: jest.fn(),
+    trackError: jest.fn(),
+    getDiagnostics: jest.fn().mockReturnValue({ enabled: false }),
+    shutdown: jest.fn().mockResolvedValue()
+  }));
+});
+
+// Mock Canary Rollout Service
+jest.mock('../src/services/canaryRolloutService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(),
+    isFeatureEnabledForUser: jest.fn().mockReturnValue(false),
+    shutdown: jest.fn().mockResolvedValue()
+  }));
+});
+
+// Mock Beta User Service
+jest.mock('../src/services/betaUserService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(),
+    shutdown: jest.fn().mockResolvedValue()
+  }));
+});
+
+// Mock Rollout Monitoring Service
+jest.mock('../src/services/rolloutMonitoringService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(),
+    shutdown: jest.fn().mockResolvedValue()
+  }));
+});
+
+// Mock Language Service
+jest.mock('../src/services/langService', () => {
+  return jest.fn().mockImplementation(() => ({
+    detectLanguage: jest.fn().mockResolvedValue({
+      detectedLanguage: 'spa',
+      languageName: 'Spanish',
+      confidence: 0.9,
+      success: true
+    }),
+    close: jest.fn().mockResolvedValue(),
+    shutdown: jest.fn().mockResolvedValue()
+  }));
+});
+
+const pdfParse = require('pdf-parse');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const Tesseract = require('tesseract.js');
@@ -38,7 +174,7 @@ describe('Bilingual Document Integration Tests', () => {
   let enhancedParsingService;
   let languageService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     
     // Setup default mock implementations
@@ -62,6 +198,11 @@ describe('Bilingual Document Integration Tests', () => {
       minConfidence: 0.1,
       fallbackLanguage: 'eng'
     });
+
+    // Clear AI cache to ensure clean state for each test
+    if (enhancedParsingService.aiCache) {
+      await enhancedParsingService.aiCache.clear();
+    }
   });
 
   afterEach(async () => {
@@ -254,6 +395,11 @@ describe('Bilingual Document Integration Tests', () => {
         Monto: $1,500.00
       `;
 
+      // Clear the AI cache to ensure we get fresh results
+      if (enhancedParsingService.aiCache) {
+        await enhancedParsingService.aiCache.clear();
+      }
+
       // Mock the AI service to capture the language context
       const mockAITextService = {
         extractMetadataAI: jest.fn().mockResolvedValue({
@@ -270,6 +416,15 @@ describe('Bilingual Document Integration Tests', () => {
 
       // Replace the AI service in the enhanced parsing service
       enhancedParsingService.aiTextService = mockAITextService;
+      
+      // Also mock the cache to return null to force AI processing
+      if (enhancedParsingService.aiCache) {
+        enhancedParsingService.aiCache.get = jest.fn().mockResolvedValue(null);
+      }
+      
+      // Debug: Check if the mock was applied
+      console.log('Mock applied:', enhancedParsingService.aiTextService === mockAITextService);
+      console.log('Mock function:', typeof enhancedParsingService.aiTextService.extractMetadataAI);
 
       pdfParse.mockResolvedValue({
         text: spanishText,
@@ -279,7 +434,7 @@ describe('Bilingual Document Integration Tests', () => {
       const result = await enhancedParsingService.analyzeDocumentEnhanced(
         spanishText, 
         '/test/spanish-ai-test.pdf',
-        { forceAI: true }
+        { forceAI: true, forceRefresh: true }
       );
 
       expect(mockAITextService.extractMetadataAI).toHaveBeenCalledWith(

@@ -110,8 +110,10 @@ class TelemetryService {
       await this.loadMetrics();
       this.isInitialized = true;
       
-      // Periodic save will be set up after initialization
-      this.saveIntervalId = null;
+      // Set up periodic save
+      this.saveIntervalId = setInterval(() => {
+        this.saveMetrics().catch(console.error);
+      }, this.saveInterval);
       
       console.log('Telemetry service initialized');
     } catch (error) {
@@ -190,6 +192,12 @@ class TelemetryService {
   trackAICall(callData) {
     if (!this.enabled) return;
     
+    // Lazy initialization - only initialize when actually needed
+    if (!this.isInitialized) {
+      this.initialize().catch(console.error);
+      return; // Skip this call, will be tracked on next call
+    }
+    
     const { success, latency, cached, model, error } = callData;
     
     this.metrics.aiCalls.total++;
@@ -226,6 +234,12 @@ class TelemetryService {
    */
   trackCachePerformance(cacheData) {
     if (!this.enabled) return;
+    
+    // Lazy initialization - only initialize when actually needed
+    if (!this.isInitialized) {
+      this.initialize().catch(console.error);
+      return; // Skip this call, will be tracked on next call
+    }
     
     const { hit, size, eviction } = cacheData;
     
@@ -300,6 +314,12 @@ class TelemetryService {
    */
   trackError(type, message, context = {}) {
     if (!this.enabled) return;
+    
+    // Lazy initialization - only initialize when actually needed
+    if (!this.isInitialized) {
+      this.initialize().catch(console.error);
+      return; // Skip this call, will be tracked on next call
+    }
     
     this.metrics.errors.total++;
     this.sessionMetrics.errors++;

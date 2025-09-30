@@ -141,6 +141,9 @@ class LanguageService {
 
     // Cache cleanup interval will be set up in initialize() method
     this.cacheCleanupInterval = null;
+
+    // Lazy initialization flag
+    this.initialized = false;
   }
 
   /**
@@ -148,10 +151,17 @@ class LanguageService {
    * @returns {Promise<void>}
    */
   async initialize() {
+    if (this.initialized) {
+      return; // Already initialized
+    }
+
     // Set up cache cleanup interval if caching is enabled
     if (this.options.enableCache && !this.cacheCleanupInterval) {
       this.cacheCleanupInterval = setInterval(() => this.cleanupCache(), this.options.cacheTTL);
     }
+
+    this.initialized = true;
+    this.log('LanguageService initialized');
   }
 
   /**
@@ -161,6 +171,11 @@ class LanguageService {
    * @returns {Promise<Object>} Language detection result
    */
   async detectLanguage(text, options = {}) {
+    // Lazy initialization - only initialize when actually needed
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
     const startTime = Date.now();
     this.stats.totalDetections++;
 

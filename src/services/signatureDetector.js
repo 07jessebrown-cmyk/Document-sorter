@@ -48,10 +48,13 @@ class SignatureDetector {
     // Cache cleanup interval will be set up in initialize() method
     this.cacheCleanupInterval = null;
 
+    // Lazy initialization flag
+    this.initialized = false;
+
     // Initialize signature patterns
     this.initializePatterns();
 
-    this.log('SignatureDetector initialized');
+    this.log('SignatureDetector constructed (lazy initialization)');
   }
 
   /**
@@ -59,12 +62,19 @@ class SignatureDetector {
    * @returns {Promise<void>}
    */
   async initialize() {
+    if (this.initialized) {
+      return; // Already initialized
+    }
+
     // Set up cache cleanup interval only if not already set
     if (!this.cacheCleanupInterval) {
       this.cacheCleanupInterval = setInterval(() => {
         this.cleanupCache();
       }, this.options.cacheTTL);
     }
+
+    this.initialized = true;
+    this.log('SignatureDetector initialized');
   }
 
   /**
@@ -193,6 +203,11 @@ class SignatureDetector {
    * @returns {Promise<Object>} Signature detection result
    */
   async detectSignatures(text) {
+    // Lazy initialization - only initialize when actually needed
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
     const startTime = Date.now();
     this.stats.totalDetections++;
 

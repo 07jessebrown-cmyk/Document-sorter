@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const pdfParse = require('pdf-parse');
 
 class WatermarkService {
   constructor(options = {}) {
@@ -97,7 +98,6 @@ class WatermarkService {
    */
   async extractTextFromPDF(filePath) {
     try {
-      const pdfParse = require('pdf-parse');
       const dataBuffer = fs.readFileSync(filePath);
       const data = await pdfParse(dataBuffer);
       return data.text;

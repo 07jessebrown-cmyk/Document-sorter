@@ -36,6 +36,10 @@ class AICache {
       evictions: 0,
       lastCleanup: Date.now()
     };
+
+    // Lazy initialization flag
+    this.initialized = false;
+    this.saveIntervalId = null;
   }
 
   /**
@@ -61,13 +65,22 @@ class AICache {
    * @returns {Promise<void>}
    */
   async initialize() {
+    if (this.initialized) {
+      return; // Already initialized
+    }
+
     try {
       await this.ensureCacheDir();
       await this.loadFromDisk();
       this.isLoaded = true;
       
-      // Periodic save will be set up after initialization
-      this.saveIntervalId = null;
+      // Set up periodic save
+      this.saveIntervalId = setInterval(() => {
+        this.saveToDisk().catch(console.error);
+      }, this.saveInterval);
+      
+      this.initialized = true;
+      console.log('✅ AI Cache initialized');
       
     } catch (error) {
       console.warn('Failed to initialize AI cache:', error.message);
@@ -165,9 +178,16 @@ class AICache {
   /**
    * Get cached result for a given text hash
    * @param {string} hash - SHA256 hash of the input text
+   * @param {Object} options - Options including forceRefresh
    * @returns {Promise<Object|null>} Cached result or null if not found/expired
    */
-  async get(hash) {
+  async get(hash, options = {}) {
+    // Disable cache in test environment or when forceRefresh is true
+    if (process.env.NODE_ENV === 'test' || options.forceRefresh) {
+      this.stats.misses++;
+      return null;
+    }
+
     if (!this.isLoaded) {
       await this.initialize();
     }
@@ -614,6 +634,34 @@ class AICache {
     }
     
     console.log(`✅ Cache warmed with ${commonPatterns.length} patterns`);
+  }
+
+  /**
+   * Shutdown the cache service
+   * @returns {Promise<void>}
+   */
+  async shutdown() {
+    try {
+      // Clear the save interval
+      if (this.saveIntervalId) {
+        clearInterval(this.saveIntervalId);
+        this.saveIntervalId = null;
+      }
+
+      // Save any pending changes
+      if (this.isLoaded) {
+        await this.saveToDisk();
+      }
+
+      // Clear memory cache
+      this.memoryCache.clear();
+      this.isLoaded = false;
+      this.initialized = false;
+
+      console.log('✅ AI Cache shutdown completed');
+    } catch (error) {
+      console.warn('⚠️ Error during AI Cache shutdown:', error.message);
+    }
   }
 }
 

@@ -543,6 +543,14 @@ class CanaryRolloutService {
     
     console.log('🔒 Canary rollout service closed');
   }
+
+  /**
+   * Shutdown method for test cleanup
+   * @returns {Promise<void>}
+   */
+  async shutdown() {
+    await this.close();
+  }
 }
 
 module.exports = CanaryRolloutService;

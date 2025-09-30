@@ -423,6 +423,14 @@ class RolloutMonitoringService {
     
     console.log('🔒 Rollout monitoring service closed');
   }
+
+  /**
+   * Shutdown method for test cleanup
+   * @returns {Promise<void>}
+   */
+  async shutdown() {
+    await this.close();
+  }
 }
 
 module.exports = RolloutMonitoringService;

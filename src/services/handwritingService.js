@@ -17,7 +17,7 @@ class HandwritingService {
       supportedLanguages: options.supportedLanguages || ['eng', 'spa', 'fra', 'deu', 'ita', 'por', 'rus'],
       // OCR engine options optimized for handwriting
       engineOptions: {
-        logger: options.debug ? m => console.log(`[Handwriting] ${m}`) : () => {},
+        // Don't pass logger to avoid cloning issues with workers
         ...options.engineOptions
       },
       // Confidence threshold for handwriting detection
@@ -102,7 +102,6 @@ class HandwritingService {
     try {
       for (let i = 0; i < this.maxWorkers; i++) {
         const worker = await Tesseract.createWorker({
-          logger: this.options.engineOptions.logger,
           cachePath: this.options.cacheDir
         });
         
@@ -303,7 +302,9 @@ class HandwritingService {
     // Check for signature patterns (more specific patterns)
     const signaturePatterns = [
       /signature/i, /signed/i, /sign here/i, /authorized by/i,
-      /manuscript/i, /cursive/i, /script/i
+      /manuscript/i, /cursive/i, /script/i, /please sign/i,
+      /sign and date/i, /authorized signature/i, /signature line/i,
+      /signature block/i, /personal note/i, /memo/i, /annotation/i, /comment/i
     ];
 
     const hasSignaturePatterns = signaturePatterns.some(pattern => pattern.test(text));
@@ -350,7 +351,7 @@ class HandwritingService {
     if (handwritingCharCount > printedCharCount) handwritingIndicators++;
     
     // Determine handwriting type
-    if (hasSignaturePatterns && handwritingIndicators >= 2) {
+    if (hasSignaturePatterns) {
       analysis.type = 'signature';
       analysis.isSignature = true;
       analysis.hasHandwriting = true;
@@ -458,16 +459,42 @@ class HandwritingService {
       }
     }
 
-    // Check for signature-like patterns
+    // Check for signature-like patterns with more comprehensive matching
     const signaturePatterns = [
-      /signature/i, /signed/i, /sign here/i, /authorized by/i,
-      /handwritten/i, /manuscript/i, /cursive/i, /script/i
+      { pattern: /signature/i, name: 'signature_pattern', weight: 0.3 },
+      { pattern: /signed/i, name: 'signed_pattern', weight: 0.3 },
+      { pattern: /sign here/i, name: 'sign_here_pattern', weight: 0.3 },
+      { pattern: /authorized by/i, name: 'authorized_pattern', weight: 0.3 },
+      { pattern: /handwritten/i, name: 'handwritten_pattern', weight: 0.2 },
+      { pattern: /manuscript/i, name: 'manuscript_pattern', weight: 0.2 },
+      { pattern: /cursive/i, name: 'cursive_pattern', weight: 0.2 },
+      { pattern: /script/i, name: 'script_pattern', weight: 0.2 },
+      { pattern: /personal note/i, name: 'personal_note_pattern', weight: 0.2 },
+      { pattern: /memo/i, name: 'memo_pattern', weight: 0.2 },
+      { pattern: /annotation/i, name: 'annotation_pattern', weight: 0.2 },
+      { pattern: /comment/i, name: 'comment_pattern', weight: 0.2 }
     ];
 
-    for (const pattern of signaturePatterns) {
+    for (const { pattern, name, weight } of signaturePatterns) {
       if (pattern.test(text)) {
-        patterns.push('signature_pattern');
-        confidence += 0.2;
+        patterns.push(name);
+        confidence += weight;
+      }
+    }
+
+    // Additional pattern matching for common signature contexts
+    const contextPatterns = [
+      { pattern: /please sign/i, name: 'please_sign_pattern', weight: 0.25 },
+      { pattern: /sign and date/i, name: 'sign_date_pattern', weight: 0.25 },
+      { pattern: /authorized signature/i, name: 'authorized_signature_pattern', weight: 0.3 },
+      { pattern: /signature line/i, name: 'signature_line_pattern', weight: 0.25 },
+      { pattern: /signature block/i, name: 'signature_block_pattern', weight: 0.25 }
+    ];
+
+    for (const { pattern, name, weight } of contextPatterns) {
+      if (pattern.test(text)) {
+        patterns.push(name);
+        confidence += weight;
       }
     }
 

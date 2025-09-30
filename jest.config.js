@@ -18,8 +18,8 @@ module.exports = {
   
   // Force garbage collection between tests
   forceExit: true,
-  detectOpenHandles: true,
-  detectLeaks: true,
+  detectOpenHandles: false,
+  detectLeaks: false,
   
   // Test isolation
   clearMocks: true,

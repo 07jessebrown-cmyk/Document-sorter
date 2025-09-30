@@ -5,10 +5,12 @@ const path = require('path');
 // Mock fs for testing
 jest.mock('fs');
 jest.mock('child_process');
+jest.mock('pdf-parse', () => jest.fn());
 
 describe('TableExtractorService', () => {
   let tableExtractor;
   let mockSpawn;
+  let mockPdfParse;
 
   beforeEach(() => {
     // Reset mocks
@@ -21,6 +23,13 @@ describe('TableExtractorService', () => {
     const { spawn } = require('child_process');
     mockSpawn = jest.fn();
     spawn.mockImplementation(mockSpawn);
+    
+    // Mock pdf-parse
+    mockPdfParse = require('pdf-parse');
+    mockPdfParse.mockResolvedValue({
+      text: 'Sample PDF text content',
+      numpages: 1
+    });
     
     // Create new instance
     tableExtractor = new TableExtractorService({
@@ -296,26 +305,104 @@ describe('TableExtractorService', () => {
   });
 
   describe('extractWithPdf2table', () => {
-    test('should return not implemented error', async () => {
-      const result = await tableExtractor.extractWithPdf2table('/test/file.pdf');
+    test('should handle file not found error', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockImplementation(() => {
+        throw new Error('ENOENT: no such file or directory, open \'/nonexistent/file.pdf\'');
+      });
+      
+      const result = await tableExtractor.extractWithPdf2table('/nonexistent/file.pdf');
       
       expect(result.success).toBe(false);
       expect(result.tables).toEqual([]);
       expect(result.confidence).toBe(0.0);
       expect(result.method).toBe('pdf2table');
-      expect(result.errors).toContain('pdf2table not implemented - requires package installation');
+      expect(result.errors[0]).toContain('ENOENT: no such file or directory');
+    });
+
+    test('should extract tables from valid PDF', async () => {
+      // Mock fs.readFileSync to return a mock PDF buffer
+      const mockPdfBuffer = Buffer.from('mock pdf content');
+      fs.readFileSync.mockReturnValue(mockPdfBuffer);
+      
+      // Mock pdf-parse to return structured data
+      mockPdfParse.mockResolvedValue({
+        text: 'Name    Age    City\nJohn    25     New York\nJane    30     Los Angeles',
+        numpages: 1
+      });
+      
+      const result = await tableExtractor.extractWithPdf2table('/test/file.pdf');
+      
+      expect(result.success).toBe(true);
+      expect(result.tables).toHaveLength(1);
+      expect(result.tables[0].method).toBe('pdf2table');
+      expect(result.tables[0].data).toEqual([
+        ['Name', 'Age', 'City'],
+        ['John', '25', 'New York'],
+        ['Jane', '30', 'Los Angeles']
+      ]);
+      expect(result.confidence).toBeGreaterThan(0);
     });
   });
 
   describe('extractWithRegex', () => {
-    test('should return not implemented error', async () => {
+    test('should handle file not found error', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockImplementation(() => {
+        throw new Error('ENOENT: no such file or directory, open \'/nonexistent/file.pdf\'');
+      });
+      
+      const result = await tableExtractor.extractWithRegex('/nonexistent/file.pdf');
+      
+      expect(result.success).toBe(false);
+      expect(result.tables).toEqual([]);
+      expect(result.confidence).toBe(0.0);
+      expect(result.method).toBe('regex');
+      expect(result.errors[0]).toContain('ENOENT: no such file or directory');
+    });
+
+    test('should extract tables using regex patterns', async () => {
+      // Mock fs.readFileSync to return a mock PDF buffer
+      const mockPdfBuffer = Buffer.from('mock pdf content');
+      fs.readFileSync.mockReturnValue(mockPdfBuffer);
+      
+      // Mock pdf-parse to return structured data with table-like content
+      mockPdfParse.mockResolvedValue({
+        text: 'Name    Age    City\nJohn    25     New York\nJane    30     Los Angeles',
+        numpages: 1
+      });
+      
+      const result = await tableExtractor.extractWithRegex('/test/file.pdf');
+      
+      expect(result.success).toBe(true);
+      expect(result.tables).toHaveLength(1);
+      expect(result.tables[0].method).toBe('regex');
+      expect(result.tables[0].data).toEqual([
+        ['Name', 'Age', 'City'],
+        ['John', '25', 'New York'],
+        ['Jane', '30', 'Los Angeles']
+      ]);
+      expect(result.confidence).toBeGreaterThan(0);
+    });
+
+    test('should handle empty PDF content', async () => {
+      // Mock fs.readFileSync to return a mock PDF buffer
+      const mockPdfBuffer = Buffer.from('mock pdf content');
+      fs.readFileSync.mockReturnValue(mockPdfBuffer);
+      
+      // Mock pdf-parse to return empty content
+      mockPdfParse.mockResolvedValue({
+        text: '',
+        numpages: 1
+      });
+      
       const result = await tableExtractor.extractWithRegex('/test/file.pdf');
       
       expect(result.success).toBe(false);
       expect(result.tables).toEqual([]);
       expect(result.confidence).toBe(0.0);
       expect(result.method).toBe('regex');
-      expect(result.errors).toContain('Regex extraction not implemented - requires text extraction first');
+      expect(result.errors).toContain('No text content found in PDF');
     });
   });
 
