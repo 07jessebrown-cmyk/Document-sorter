@@ -494,6 +494,13 @@ class TelemetryService {
         await this.saveMetrics();
       }
       
+      // Clear any pending operations
+      await new Promise(resolve => setImmediate(resolve));
+      
+      // Clear data structures
+      this.metrics = null;
+      this.sessionMetrics = null;
+      
       this.isInitialized = false;
       
     } catch (error) {

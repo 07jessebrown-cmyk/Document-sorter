@@ -415,6 +415,9 @@ class RolloutMonitoringService {
       this.healthCheckInterval = null;
     }
     
+    // Clear any pending operations
+    await new Promise(resolve => setImmediate(resolve));
+    
     // Clear all data structures
     this.monitoringData = null;
     this.alertThresholds = null;

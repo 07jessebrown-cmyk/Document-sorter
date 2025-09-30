@@ -7,14 +7,44 @@ jest.mock('tesseract.js', () => ({
 // Mock fs
 jest.mock('fs');
 
+// Mock services with standardized structure
+jest.mock('../../src/services/telemetryService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined)
+  }));
+});
+
+jest.mock('../../src/services/canaryRolloutService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined)
+  }));
+});
+
+jest.mock('../../src/services/aiTextService', () => {
+  return jest.fn().mockImplementation(() => ({
+    analyze: jest.fn(() => ({
+      clientName: 'Corporación Acme',
+      date: '2023-12-15',
+      type: 'Invoice'
+    })),
+    setLLMClient: jest.fn(),
+    setCache: jest.fn(),
+    setTelemetry: jest.fn(),
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    extractMetadataAI: jest.fn()
+  }));
+});
+
 // Mock all the services that EnhancedParsingService depends on
 jest.mock('../../src/services/configService');
 jest.mock('../../src/services/tableExtractor');
 jest.mock('../../src/services/langService');
 jest.mock('../../src/services/handwritingService');
 jest.mock('../../src/services/watermarkService');
-jest.mock('../../src/services/telemetryService');
-jest.mock('../../src/services/canaryRolloutService');
 jest.mock('../../src/services/rolloutMonitoringService');
 jest.mock('../../src/services/betaUserService');
 jest.mock('../../src/services/ai_prompts');
@@ -60,52 +90,30 @@ describe('OCR Integration Tests', () => {
     // Mock fs.existsSync
     fs.existsSync.mockReturnValue(true);
     
-    // Set up ConfigService mock
+    // Set up standardized ConfigService mock
     const ConfigService = require('../../src/services/configService');
     mockConfigService = {
-      get: jest.fn((key, defaultValue) => {
-        const config = {
-          'ai.enabled': false,
-          'ai.confidenceThreshold': 0.5,
-          'ai.batchSize': 5,
-          'ai.timeout': 30000,
-          'extraction.useOCR': true,
-          'extraction.useTableExtraction': false,
-          'extraction.useLLMEnhancer': true,
-          'extraction.ocrLanguage': 'eng',
-          'extraction.ocrWorkerPoolSize': 2,
-          'extraction.useHandwritingDetection': false,
-          'extraction.useWatermarkDetection': false,
-          'debug': false
-        };
-        return config[key] !== undefined ? config[key] : defaultValue;
+      get: jest.fn((key) => {
+        if (key === 'ai.enabled') return false;
+        if (key === 'ai.confidenceThreshold') return 0.5;
+        if (key === 'ai.batchSize') return 5;
+        if (key === 'ai.timeout') return 30000;
+        if (key === 'extraction.useOCR') return true;
+        if (key === 'extraction.useTableExtraction') return false;
+        if (key === 'extraction.useLLMEnhancer') return true;
+        if (key === 'extraction.ocrLanguage') return 'eng';
+        if (key === 'extraction.ocrWorkerPoolSize') return 2;
+        if (key === 'extraction.useHandwritingDetection') return false;
+        if (key === 'extraction.useWatermarkDetection') return false;
+        if (key === 'debug') return false;
+        return null;
       }),
       getExtractionConfig: jest.fn(() => ({
         useOCR: true,
         useTableExtraction: false,
-        useLLMEnhancer: true
-      })),
-      getAIConfig: jest.fn(() => ({
-        enabled: false,
-        model: 'gpt-3.5-turbo',
-        confidenceThreshold: 0.5,
-        batchSize: 5,
-        maxRetries: 3,
-        retryDelay: 1000,
-        maxDelay: 10000,
-        timeout: 30000
-      })),
-      getProcessingConfig: jest.fn(() => ({
-        enableAIFallback: true,
-        aiFallbackThreshold: 0.3,
-        concurrentProcessing: true,
-        maxConcurrentFiles: 5
-      })),
-      set: jest.fn(),
-      save: jest.fn().mockResolvedValue(true),
-      getAll: jest.fn(() => ({
-        ai: { enabled: false, confidenceThreshold: 0.5, batchSize: 5, timeout: 30000 },
-        extraction: { useOCR: true, useTableExtraction: false, useLLMEnhancer: true }
+        useLLMEnhancer: true,
+        useHandwritingDetection: false,
+        useWatermarkDetection: false
       }))
     };
     ConfigService.mockImplementation(() => mockConfigService);
@@ -113,8 +121,14 @@ describe('OCR Integration Tests', () => {
     // Create parsing service with OCR enabled
     parsingService = new EnhancedParsingService({
       useOCR: true,
-      useAI: false // Disable AI for these tests
+      useAI: false,
+      configService: mockConfigService
     });
+    
+    // Clear AI cache
+    if (parsingService.aiCache) {
+      await parsingService.aiCache.clear();
+    }
     
     // Wait for OCR service to initialize
     if (parsingService.ocrService) {

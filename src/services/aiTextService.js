@@ -736,9 +736,13 @@ class AITextService {
       await this.cache.close();
     }
     
+    // Clear any pending operations
+    await new Promise(resolve => setImmediate(resolve));
+    
     // Clear references
     this.llmClient = null;
     this.cache = null;
+    this.telemetry = null;
     
     console.log('🔒 AI Text Service closed');
   }

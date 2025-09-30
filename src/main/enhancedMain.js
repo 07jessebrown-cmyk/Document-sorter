@@ -5,10 +5,12 @@ const fs = require('fs').promises;
 
 // Import enhanced parsing service
 const EnhancedParsingService = require('../services/enhancedParsingService');
+const SecureFileProcessor = require('../services/secureFileProcessor');
 
 // Keep a global reference of the window object
 let mainWindow;
 let enhancedParsingService;
+let secureFileProcessor;
 
 /**
  * Enhanced Main Process with AI Integration
@@ -69,58 +71,86 @@ async function initializeEnhancedParsingService() {
     } else {
       console.log('✅ Enhanced parsing service (regex only) initialized');
     }
+
+    // Initialize secure file processor
+    secureFileProcessor = new SecureFileProcessor();
+    await secureFileProcessor.initialize();
+    console.log('✅ Secure file processor initialized');
   } catch (error) {
-    console.error('❌ Failed to initialize enhanced parsing service:', error);
+    console.error('❌ Failed to initialize services:', error);
   }
 }
 
 /**
- * Enhanced file processing with AI integration
+ * Secure file processing with copy-based operations
  * @param {string} filePath - Path to the file to process
  * @returns {Promise<Object>} Processing result
  */
-async function processFileEnhanced(filePath) {
-  console.log(`🚀 Starting enhanced processing: ${path.basename(filePath)}`);
+async function processFileSecurely(filePath) {
+  console.log(`🔒 Starting secure processing: ${path.basename(filePath)}`);
   
   try {
-    // Extract text from file
-    const extractedText = await enhancedParsingService.extractText(filePath);
-    
-    if (!extractedText || extractedText.trim().length === 0) {
-      throw new Error('No text extracted from file');
-    }
+    // Generate a client ID (in a real app, this would come from authentication)
+    const clientId = 'default-client'; // TODO: Implement proper client authentication
 
-    console.log(`📄 Extracted ${extractedText.length} characters from ${path.basename(filePath)}`);
-
-    // Analyze document with AI fallback
-    const analysis = await enhancedParsingService.analyzeDocumentEnhanced(
-      extractedText, 
+    // Process file securely using working copies
+    const secureResult = await secureFileProcessor.processFileSecurely(
       filePath,
+      clientId,
+      async (workingPath, options) => {
+        // Extract text from working copy
+        const extractedText = await enhancedParsingService.extractText(workingPath);
+        
+        if (!extractedText || extractedText.trim().length === 0) {
+          throw new Error('No text extracted from file');
+        }
+
+        console.log(`📄 Extracted ${extractedText.length} characters from ${path.basename(workingPath)}`);
+
+        // Analyze document with AI fallback
+        const analysis = await enhancedParsingService.analyzeDocumentEnhanced(
+          extractedText, 
+          workingPath,
+          {
+            forceAI: process.env.FORCE_AI === 'true',
+            model: process.env.AI_MODEL || 'gpt-3.5-turbo',
+            temperature: parseFloat(process.env.AI_TEMPERATURE) || 0.1
+          }
+        );
+
+        console.log('📊 Analysis result:', {
+          type: analysis.type,
+          clientName: analysis.clientName,
+          confidence: analysis.confidence,
+          source: analysis.source,
+          date: analysis.date
+        });
+
+        // Generate filename and folder
+        const ext = path.extname(workingPath).toLowerCase();
+        const fileName = generateFileName(analysis, ext);
+        const folder = mapTypeToFolder(analysis.type);
+        
+        console.log(`📁 Generated filename: ${fileName}`);
+        console.log(`📂 Target folder: ${folder}`);
+
+        return {
+          analysis,
+          fileName,
+          folder,
+          extractedText: extractedText.substring(0, 100) + '...' // Truncate for storage
+        };
+      },
       {
-        forceAI: process.env.FORCE_AI === 'true',
-        model: process.env.AI_MODEL || 'gpt-3.5-turbo',
-        temperature: parseFloat(process.env.AI_TEMPERATURE) || 0.1
+        metadata: {
+          processingType: 'enhanced',
+          timestamp: new Date().toISOString()
+        }
       }
     );
 
-    console.log('📊 Analysis result:', {
-      type: analysis.type,
-      clientName: analysis.clientName,
-      confidence: analysis.confidence,
-      source: analysis.source,
-      date: analysis.date
-    });
-
-    // Generate filename and folder
-    const ext = path.extname(filePath).toLowerCase();
-    const fileName = generateFileName(analysis, ext);
-    const folder = mapTypeToFolder(analysis.type);
-    
-    console.log(`📁 Generated filename: ${fileName}`);
-    console.log(`📂 Target folder: ${folder}`);
-    
-    // Handle file operations
-    const finalPath = await handleFileOperations(filePath, fileName, folder);
+    // Handle file operations (copy to final destination)
+    const finalPath = await handleFileOperations(filePath, secureResult.processingResult.fileName, secureResult.processingResult.folder);
     
     // Send detailed result to renderer
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -128,45 +158,49 @@ async function processFileEnhanced(filePath) {
         originalPath: filePath,
         finalPath: finalPath,
         success: true,
-        message: `Successfully sorted to ${path.basename(finalPath)}`,
-        analysis: {
-          type: analysis.type,
-          clientName: analysis.clientName,
-          date: analysis.date,
-          confidence: analysis.confidence,
-          source: analysis.source,
-          aiConfidence: analysis.aiConfidence,
-          snippets: analysis.snippets,
-          clientConfidence: analysis.clientConfidence,
-          dateConfidence: analysis.dateConfidence,
-          docTypeConfidence: analysis.docTypeConfidence
-        }
+        analysis: secureResult.processingResult.analysis,
+        fileId: secureResult.fileId,
+        integrityVerified: secureResult.integrityVerified,
+        message: `Successfully processed securely: ${path.basename(filePath)}`
       });
     }
-    
-    console.log(`✅ Enhanced processing completed: ${path.basename(filePath)} -> ${path.basename(finalPath)}`);
+
     return {
       success: true,
       originalPath: filePath,
       finalPath: finalPath,
-      analysis: analysis
+      analysis: secureResult.processingResult.analysis,
+      fileName: secureResult.processingResult.fileName,
+      folder: secureResult.processingResult.folder,
+      fileId: secureResult.fileId,
+      integrityVerified: secureResult.integrityVerified
     };
-    
+
   } catch (error) {
-    console.error(`❌ Enhanced processing failed for ${path.basename(filePath)}:`, error);
+    console.error(`❌ Secure processing failed for ${path.basename(filePath)}:`, error);
     
-    // Send error notification to renderer
+    // Send error to renderer
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('file:processed', {
         originalPath: filePath,
-        error: error.message,
         success: false,
-        message: `Failed to process: ${error.message}`
+        error: error.message,
+        message: `Secure processing failed: ${error.message}`
       });
     }
-    
+
     throw error;
   }
+}
+
+/**
+ * Enhanced file processing with AI integration (legacy - now uses secure processing)
+ * @param {string} filePath - Path to the file to process
+ * @returns {Promise<Object>} Processing result
+ */
+async function processFileEnhanced(filePath) {
+  // Use secure processing instead of direct file access
+  return await processFileSecurely(filePath);
 }
 
 /**

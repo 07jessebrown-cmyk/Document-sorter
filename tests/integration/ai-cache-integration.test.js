@@ -13,6 +13,38 @@ jest.mock('fs', () => ({
   }
 }));
 
+// Mock services with standardized structure
+jest.mock('../../src/services/telemetryService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined)
+  }));
+});
+
+jest.mock('../../src/services/canaryRolloutService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined)
+  }));
+});
+
+jest.mock('../../src/services/aiTextService', () => {
+  return jest.fn().mockImplementation(() => ({
+    analyze: jest.fn(() => ({
+      clientName: 'Corporación Acme',
+      date: '2023-12-15',
+      type: 'Invoice'
+    })),
+    setLLMClient: jest.fn(),
+    setCache: jest.fn(),
+    setTelemetry: jest.fn(),
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    extractMetadataAI: jest.fn()
+  }));
+});
+
 describe('AI Cache Integration Tests', () => {
   let cache;
   let mockFs;
@@ -45,6 +77,26 @@ describe('AI Cache Integration Tests', () => {
       await fs.rmdir(tempCacheDir, { recursive: true });
     } catch (error) {
       // Ignore cleanup errors
+    }
+  });
+
+  afterAll(async () => {
+    try {
+      // Clear all timers and intervals
+      jest.clearAllTimers();
+      
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+      }
+      
+      // Wait for any pending operations
+      await new Promise(resolve => setImmediate(resolve));
+      
+      // Additional cleanup for memory leaks
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.warn('afterAll cleanup warning:', error.message);
     }
   });
 

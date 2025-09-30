@@ -434,7 +434,7 @@ class EnhancedParsingService extends ParsingService {
           const aiResult = await this.processWithAI(text, filePath, aiOptions);
           if (aiResult) {
             // Merge AI results with regex results and table data
-            const mergedResult = this.mergeResults(enhancedRegexResult, aiResult, tableData);
+            const mergedResult = this.mergeResults(enhancedRegexResult, aiResult, tableData, languageInfo);
             this.stats.averageConfidence = this.updateAverageConfidence(mergedResult.confidence);
             
             // Track AI processing completion
@@ -914,9 +914,10 @@ class EnhancedParsingService extends ParsingService {
    * @param {Object} regexResult - Regex analysis result
    * @param {Object} aiResult - AI analysis result
    * @param {Object} tableResult - Table extraction result (optional)
+   * @param {Object} languageInfo - Language detection result (optional)
    * @returns {Object} Merged result with enhanced confidence scoring
    */
-  mergeResults(regexResult, aiResult, tableResult = null) {
+  mergeResults(regexResult, aiResult, tableResult = null, languageInfo = null) {
     const merged = { ...regexResult };
     
     // Initialize field sources tracking
@@ -939,7 +940,8 @@ class EnhancedParsingService extends ParsingService {
       'table',
       aiResult.clientName,
       aiResult.clientConfidence,
-      'ai'
+      'ai',
+      languageInfo
     );
     
     merged.clientName = clientNameResult.value;
@@ -957,7 +959,8 @@ class EnhancedParsingService extends ParsingService {
       'table',
       aiResult.date,
       aiResult.dateConfidence,
-      'ai'
+      'ai',
+      languageInfo
     );
     
     merged.date = dateResult.value;
@@ -975,7 +978,8 @@ class EnhancedParsingService extends ParsingService {
       'table',
       aiResult.type,
       aiResult.docTypeConfidence,
-      'ai'
+      'ai',
+      languageInfo
     );
     
     merged.type = docTypeResult.value;
@@ -993,7 +997,8 @@ class EnhancedParsingService extends ParsingService {
       'table',
       aiResult.amount,
       aiResult.amountConfidence || 0,
-      'ai'
+      'ai',
+      languageInfo
     );
     
     merged.amount = amountResult.value;
@@ -1011,7 +1016,8 @@ class EnhancedParsingService extends ParsingService {
       'table',
       aiResult.title,
       aiResult.titleConfidence || 0,
-      'ai'
+      'ai',
+      languageInfo
     );
     
     merged.title = titleResult.value;
@@ -1063,10 +1069,11 @@ class EnhancedParsingService extends ParsingService {
    * @param {*} aiValue - Value from AI extraction
    * @param {number} aiConfidence - Confidence from AI extraction
    * @param {string} aiSource - Source identifier for AI
+   * @param {Object} languageInfo - Language detection result (optional)
    * @returns {Object} Merged field result with value, confidence, and source
    * @private
    */
-  mergeField(fieldName, regexValue, regexConfidence, regexSource, tableValue, tableConfidence, tableSource, aiValue, aiConfidence, aiSource) {
+  mergeField(fieldName, regexValue, regexConfidence, regexSource, tableValue, tableConfidence, tableSource, aiValue, aiConfidence, aiSource, languageInfo = null) {
     // Priority: regex > table > AI
     // But if regex has no value or very low confidence, use the best available
     
@@ -1078,6 +1085,16 @@ class EnhancedParsingService extends ParsingService {
     
     if (candidates.length === 0) {
       return { value: null, confidence: 0, source: 'none' };
+    }
+    
+    // Bilingual mode logic: if we're in bilingual mode and regex confidence is low, prefer AI
+    const isBilingualMode = languageInfo && 
+      languageInfo.detectedLanguage && 
+      languageInfo.detectedLanguage !== 'eng' && 
+      languageInfo.confidence > 0.5;
+    
+    if (isBilingualMode && fieldName === 'clientName' && regexConfidence < 0.5 && aiValue) {
+      return { value: aiValue, confidence: aiConfidence, source: aiSource };
     }
     
     // If regex has a value and reasonable confidence, use it
@@ -1197,7 +1214,7 @@ class EnhancedParsingService extends ParsingService {
                 titleConfidence: result.titleConfidence
               } : null;
               
-              results[index] = this.mergeResults(result, aiResult, tableData);
+              results[index] = this.mergeResults(result, aiResult, tableData, languageInfo);
               this.stats.aiProcessed++;
             } else {
               results[index] = result;

@@ -7,8 +7,8 @@ process.env.CI = process.env.CI || 'true';
 // Import cleanup utilities
 const { globalCleanup, setupJestWithCleanup } = require('./utils/testCleanup');
 
-// Setup Jest with memory leak prevention - disabled for now
-// setupJestWithCleanup();
+// Setup Jest with memory leak prevention
+setupJestWithCleanup();
 
 // Mock Electron modules for testing
 jest.mock('electron', () => ({
@@ -117,33 +117,41 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  // Clean up after each test
-  await globalCleanup.cleanup();
-  
-  // Clear all timers
-  jest.clearAllTimers();
-  
-  // Force garbage collection if available
-  if (global.gc) {
-    global.gc();
+  try {
+    // Clean up after each test
+    await globalCleanup.cleanup();
+    
+    // Clear all timers
+    jest.clearAllTimers();
+    
+    // Force garbage collection if available
+    if (global.gc) {
+      global.gc();
+    }
+    
+    // Wait for any pending operations
+    await new Promise(resolve => setImmediate(resolve));
+  } catch (error) {
+    console.warn('Test cleanup warning:', error.message);
   }
-  
-  // Wait for any pending operations
-  await new Promise(resolve => setImmediate(resolve));
 });
 
 afterAll(async () => {
-  // Final cleanup
-  await globalCleanup.cleanup();
-  
-  // Clear all timers
-  jest.clearAllTimers();
-  
-  // Force garbage collection
-  if (global.gc) {
-    global.gc();
+  try {
+    // Final cleanup
+    await globalCleanup.cleanup();
+    
+    // Clear all timers
+    jest.clearAllTimers();
+    
+    // Force garbage collection
+    if (global.gc) {
+      global.gc();
+    }
+    
+    // Wait for cleanup to complete
+    await new Promise(resolve => setImmediate(resolve));
+  } catch (error) {
+    console.warn('Final cleanup warning:', error.message);
   }
-  
-  // Wait for cleanup to complete
-  await new Promise(resolve => setImmediate(resolve));
 });

@@ -15,6 +15,31 @@ const CanaryRolloutService = require('../../src/services/canaryRolloutService');
 const BetaUserService = require('../../src/services/betaUserService');
 const RolloutMonitoringService = require('../../src/services/rolloutMonitoringService');
 
+// Mock services with standardized structure
+jest.mock('../../src/services/telemetryService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined)
+  }));
+});
+
+jest.mock('../../src/services/aiTextService', () => {
+  return jest.fn().mockImplementation(() => ({
+    analyze: jest.fn(() => ({
+      clientName: 'Corporación Acme',
+      date: '2023-12-15',
+      type: 'Invoice'
+    })),
+    setLLMClient: jest.fn(),
+    setCache: jest.fn(),
+    setTelemetry: jest.fn(),
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    extractMetadataAI: jest.fn()
+  }));
+});
+
 describe('Canary Rollout Integration', () => {
   let canaryService;
   let betaUserService;
@@ -64,6 +89,26 @@ describe('Canary Rollout Integration', () => {
     // Force garbage collection if available
     if (global.gc) {
       global.gc();
+    }
+  });
+
+  afterAll(async () => {
+    try {
+      // Clear all timers and intervals
+      jest.clearAllTimers();
+      
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+      }
+      
+      // Wait for any pending operations
+      await new Promise(resolve => setImmediate(resolve));
+      
+      // Additional cleanup for memory leaks
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.warn('afterAll cleanup warning:', error.message);
     }
   });
 

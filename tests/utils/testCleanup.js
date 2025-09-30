@@ -129,10 +129,38 @@ class TestCleanup {
     }
     this.tempDirs.clear();
 
+    // Clear global timers and intervals that might not be tracked
+    this.clearGlobalTimers();
+
+    // Force garbage collection if available
+    if (global.gc) {
+      global.gc();
+    }
+
     // Log errors if any
     if (errors.length > 0) {
       console.warn('Test cleanup warnings:', errors);
     }
+  }
+
+  /**
+   * Clear global timers and intervals that might not be tracked
+   * @private
+   */
+  clearGlobalTimers() {
+    // Clear any remaining timers
+    const highestTimeoutId = setTimeout(() => {}, 0);
+    for (let i = 0; i < highestTimeoutId; i++) {
+      clearTimeout(i);
+    }
+    clearTimeout(highestTimeoutId);
+
+    // Clear any remaining intervals
+    const highestIntervalId = setInterval(() => {}, 0);
+    for (let i = 0; i < highestIntervalId; i++) {
+      clearInterval(i);
+    }
+    clearInterval(highestIntervalId);
   }
 
   /**

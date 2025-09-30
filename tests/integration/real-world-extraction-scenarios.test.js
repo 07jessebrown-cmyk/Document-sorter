@@ -2,6 +2,65 @@ const EnhancedParsingService = require('../../src/services/enhancedParsingServic
 const fs = require('fs');
 const path = require('path');
 
+// Mock services with standardized structure
+jest.mock('../../src/services/telemetryService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined)
+  }));
+});
+
+jest.mock('../../src/services/canaryRolloutService', () => {
+  return jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined)
+  }));
+});
+
+jest.mock('../../src/services/aiTextService', () => {
+  return jest.fn().mockImplementation(() => ({
+    analyze: jest.fn(() => ({
+      clientName: 'Corporación Acme',
+      date: '2023-12-15',
+      type: 'Invoice'
+    })),
+    setLLMClient: jest.fn(),
+    setCache: jest.fn(),
+    setTelemetry: jest.fn(),
+    initialize: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    extractMetadataAI: jest.fn()
+  }));
+});
+
+// Standardized ConfigService mock
+const mockConfigService = {
+  get: jest.fn((key) => {
+    if (key === 'ai.enabled') return true;
+    if (key === 'ai.confidenceThreshold') return 0.5;
+    if (key === 'ai.batchSize') return 5;
+    if (key === 'ai.timeout') return 30000;
+    if (key === 'debug') return false;
+    if (key === 'extraction.useOCR') return true;
+    if (key === 'extraction.useTableExtraction') return true;
+    if (key === 'extraction.useLLMEnhancer') return true;
+    if (key === 'extraction.useHandwritingDetection') return true;
+    if (key === 'extraction.useWatermarkDetection') return true;
+    if (key === 'extraction.tableTimeout') return 30000;
+    if (key === 'extraction.ocrLanguage') return 'eng';
+    if (key === 'extraction.ocrWorkerPoolSize') return 2;
+    return null;
+  }),
+  getExtractionConfig: jest.fn(() => ({
+    useOCR: true,
+    useTableExtraction: true,
+    useLLMEnhancer: true,
+    useHandwritingDetection: true,
+    useWatermarkDetection: true
+  }))
+};
+
 // Mock all external dependencies
 jest.mock('pdf-parse', () => jest.fn());
 jest.mock('mammoth', () => ({
@@ -36,7 +95,7 @@ describe('Real-World Extraction Scenarios with Mocks', () => {
   let parsingService;
   let mockServices;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     
     // Setup default mock implementations
@@ -55,8 +114,14 @@ describe('Real-World Extraction Scenarios with Mocks', () => {
       useOCR: true,
       useTableExtraction: true,
       useHandwritingDetection: true,
-      useWatermarkDetection: true
+      useWatermarkDetection: true,
+      configService: mockConfigService
     });
+
+    // Clear AI cache
+    if (parsingService.aiCache) {
+      await parsingService.aiCache.clear();
+    }
 
     // Create comprehensive mock services
     mockServices = {
@@ -80,12 +145,28 @@ describe('Real-World Extraction Scenarios with Mocks', () => {
         detectLanguage: jest.fn()
       },
       aiTextService: {
+        analyze: jest.fn(() => ({
+          clientName: 'Corporación Acme',
+          date: '2023-12-15',
+          type: 'Invoice'
+        })),
+        setLLMClient: jest.fn(),
+        setCache: jest.fn(),
+        setTelemetry: jest.fn(),
         extractMetadataAI: jest.fn()
       },
       aiCache: {
         get: jest.fn(),
         set: jest.fn(),
+        clear: jest.fn(),
         generateHash: jest.fn(() => 'test-hash')
+      },
+      telemetry: {
+        initialize: jest.fn(),
+        close: jest.fn()
+      },
+      canaryRolloutService: {
+        initialize: jest.fn()
       }
     };
 
@@ -97,6 +178,8 @@ describe('Real-World Extraction Scenarios with Mocks', () => {
     parsingService.languageService = mockServices.languageService;
     parsingService.aiTextService = mockServices.aiTextService;
     parsingService.aiCache = mockServices.aiCache;
+    parsingService.telemetry = mockServices.telemetry;
+    parsingService.canaryRolloutService = mockServices.canaryRolloutService;
   });
 
   afterEach(async () => {
