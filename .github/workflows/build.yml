@@ -1,0 +1,132 @@
+name: Build Document Sorter
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Rebuild native modules for Electron (macOS)
+      run: npx electron-rebuild
+      
+    - name: Validate Sharp module (macOS)
+      run: npm run validate:sharp
+      
+    - name: Build for macOS
+      run: npm run dist:mac
+      
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-dmg
+        path: dist/*.dmg
+        retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Rebuild native modules for Electron (Windows)
+      run: npx electron-rebuild
+      
+    - name: Validate Sharp module (Windows)
+      run: npm run validate:sharp
+      
+    - name: Build for Windows
+      run: npm run dist:win
+      
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-exe
+        path: dist/*.exe
+        retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Rebuild native modules for Electron (Linux)
+      run: npx electron-rebuild
+      
+    - name: Validate Sharp module (Linux)
+      run: npm run validate:sharp
+      
+    - name: Build for Linux
+      run: npm run dist:linux
+      
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-appimage
+        path: dist/*.AppImage
+        retention-days: 30
+
+  release:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create release assets
+      run: |
+        mkdir -p release-assets
+        cp macos-dmg/*.dmg release-assets/ || true
+        cp windows-exe/*.exe release-assets/ || true
+        cp linux-appimage/*.AppImage release-assets/ || true
+        
+    - name: Upload to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.upload_url }}
+        asset_path: ./release-assets/
+        asset_name: Document-Sorter-Release
+        asset_content_type: application/zip

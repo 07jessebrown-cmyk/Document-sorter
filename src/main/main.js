@@ -1,31 +1,230 @@
-const electron = require('electron');
-const { app, BrowserWindow, ipcMain, Menu, dialog } = electron;
+let electron, app, BrowserWindow, ipcMain, Menu, dialog, os, fs, path, logPath;
+
+try {
+  electron = require('electron');
+  const electronModule = electron;
+  app = electronModule.app;
+  BrowserWindow = electronModule.BrowserWindow;
+  ipcMain = electronModule.ipcMain;
+  Menu = electronModule.Menu;
+  dialog = electronModule.dialog;
+} catch (err) {
+  console.error('Failed to load electron:', err.stack);
+  process.exit(1);
+}
+
+// Startup diagnostics logging
+try {
+  os = require('os');
+} catch (err) {
+  console.error('Failed to load os:', err.stack);
+  process.exit(1);
+}
+
+try {
+  fs = require('fs');
+} catch (err) {
+  console.error('Failed to load fs:', err.stack);
+  process.exit(1);
+}
+
+try {
+  path = require('path');
+} catch (err) {
+  console.error('Failed to load path:', err.stack);
+  process.exit(1);
+}
+
+// Create startup diagnostics log
+function writeStartupDiagnostics() {
+  try {
+    const appSupportDir = path.join(os.homedir(), 'Library', 'Application Support', 'Document Sorter');
+    
+    // Ensure directory exists
+    if (!fs.existsSync(appSupportDir)) {
+      fs.mkdirSync(appSupportDir, { recursive: true });
+    }
+    
+    logPath = path.join(appSupportDir, 'startup-debug.log');
+    const timestamp = new Date().toISOString();
+    
+    const diagnostics = {
+      timestamp,
+      processCwd: process.cwd(),
+      appPath: app.getAppPath(),
+      resourcesPath: process.resourcesPath,
+      envPath: process.env.PATH,
+      nodeEnv: process.env.NODE_ENV,
+      platform: process.platform,
+      arch: process.arch,
+      electronVersion: process.versions.electron,
+      nodeVersion: process.versions.node,
+      v8Version: process.versions.v8,
+      argv: process.argv,
+      execPath: process.execPath
+    };
+    
+    const logContent = `=== Document Sorter Startup Diagnostics ===
+Timestamp: ${diagnostics.timestamp}
+Process CWD: ${diagnostics.processCwd}
+App Path: ${diagnostics.appPath}
+Resources Path: ${diagnostics.resourcesPath}
+Environment PATH: ${diagnostics.envPath}
+NODE_ENV: ${diagnostics.nodeEnv}
+Platform: ${diagnostics.platform}
+Architecture: ${diagnostics.arch}
+Electron Version: ${diagnostics.electronVersion}
+Node Version: ${diagnostics.nodeVersion}
+V8 Version: ${diagnostics.v8Version}
+Exec Path: ${diagnostics.execPath}
+Process Args: ${JSON.stringify(diagnostics.argv, null, 2)}
+===============================================
+
+`;
+    
+    fs.writeFileSync(logPath, logContent, 'utf8');
+    console.log(`Startup diagnostics written to: ${logPath}`);
+  } catch (error) {
+    console.error('Failed to write startup diagnostics:', error);
+  }
+}
+
+// Write diagnostics immediately
+writeStartupDiagnostics();
 
 // Enable hot reload in development
 if (process.env.NODE_ENV === 'development') {
   try {
-    require('electron-reload')(__dirname, {
-      electron: require('electron'),
+    const electronReload = require('electron-reload');
+    electronReload(__dirname, {
+      electron: electron,
       hardResetMethod: 'exit'
     });
   } catch (error) {
+    fs.appendFileSync(logPath, `❌ Failed to load electron-reload: ${error.stack}\n`);
     console.log('Hot reload not available:', error.message);
   }
 }
 
 console.log('Document Sorter starting...');
-const fs = require('fs');
-const fsp = require('fs').promises;
-const path = require('path');
-const pdfParse = require('pdf-parse');
-const Tesseract = require('tesseract.js');
-const sharp = require('sharp');
-const mammoth = require('mammoth');
-const mime = require('mime-types');
+console.log(`🔧 Sharp module status: ${sharpAvailable ? 'Available' : 'Not Available'}`);
+
+// Test Sharp functionality if available
+async function testSharpFunctionality() {
+  if (sharpAvailable && sharp) {
+    try {
+      console.log('🧪 Testing Sharp functionality...');
+      // Create a simple test to verify Sharp works
+      const testBuffer = Buffer.from('test');
+      await sharp(testBuffer).metadata();
+      console.log('✅ Sharp functionality test passed');
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Sharp functionality test failed:', error.message);
+      console.log('📝 Falling back to basic image processing');
+      return false;
+    }
+  }
+  return false;
+}
+let fsp, pdfParse, Tesseract, sharp, sharpAvailable, mammoth, mime, EnhancedParsingService;
+
+try {
+  fsp = require('fs').promises;
+} catch (err) {
+  fs.appendFileSync(logPath, `❌ Failed to load fs.promises: ${err.stack}\n`);
+  process.exit(1);
+}
+
+try {
+  pdfParse = require('pdf-parse');
+} catch (err) {
+  fs.appendFileSync(logPath, `❌ Failed to load pdf-parse: ${err.stack}\n`);
+  process.exit(1);
+}
+
+try {
+  Tesseract = require('tesseract.js');
+} catch (err) {
+  fs.appendFileSync(logPath, `❌ Failed to load tesseract.js: ${err.stack}\n`);
+  process.exit(1);
+}
+
+// Optional Sharp module - wrapped in try-catch for diagnostics
+sharp = null;
+sharpAvailable = false;
+try {
+  sharp = require('sharp');
+  sharpAvailable = true;
+  console.log('✅ Sharp module loaded successfully');
+} catch (error) {
+  fs.appendFileSync(logPath, `❌ Failed to load sharp: ${error.stack}\n`);
+  console.warn('⚠️ Sharp module failed to load:', error.message);
+  console.log('📝 Image processing features will be limited or disabled');
+}
+
+try {
+  mammoth = require('mammoth');
+} catch (err) {
+  fs.appendFileSync(logPath, `❌ Failed to load mammoth: ${err.stack}\n`);
+  process.exit(1);
+}
+
+try {
+  mime = require('mime-types');
+} catch (err) {
+  fs.appendFileSync(logPath, `❌ Failed to load mime-types: ${err.stack}\n`);
+  process.exit(1);
+}
+
 // const natural = require('natural'); // Temporarily disabled due to installation issues
 
 // Import enhanced parsing service
-const EnhancedParsingService = require('../services/enhancedParsingService');
+try {
+  EnhancedParsingService = require('../services/enhancedParsingService');
+} catch (err) {
+  fs.appendFileSync(logPath, `❌ Failed to load EnhancedParsingService: ${err.stack}\n`);
+  process.exit(1);
+}
+
+// Fallback image processing when Sharp is not available
+function createImageProcessingFallback() {
+  return {
+    async preprocessImage(filePath) {
+      console.log('📝 Using fallback image processing (no Sharp)');
+      // Simply return the original file buffer
+      return await fsp.readFile(filePath);
+    },
+    
+    async getImageMetadata(filePath) {
+      console.log('📝 Using fallback metadata extraction (no Sharp)');
+      // Return basic metadata structure
+      return {
+        width: 1000, // Default width
+        height: 1000, // Default height
+        format: 'unknown'
+      };
+    }
+  };
+}
+
+// Initialize image processing (Sharp or fallback)
+const imageProcessor = sharpAvailable && sharp ? {
+  async preprocessImage(filePath) {
+    const meta = await sharp(filePath).metadata();
+    let pipeline = sharp(filePath).grayscale().threshold(180);
+    
+    if (meta && meta.width && meta.width < 2000) {
+      pipeline = pipeline.resize({ width: 2000, withoutEnlargement: false });
+    }
+    
+    return await pipeline.png().toBuffer();
+  },
+  
+  async getImageMetadata(filePath) {
+    return await sharp(filePath).metadata();
+  }
+} : createImageProcessingFallback();
 
 // Keep a global reference of the window object
 let mainWindow;
@@ -34,20 +233,16 @@ let mainWindow;
 let enhancedParsingService;
 
 function createWindow() {
+  fs.appendFileSync(logPath, '🧱 Creating BrowserWindow\n');
   // Create the browser window
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1024,
+    height: 768,
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
     },
-    icon: path.join(__dirname, '../../build/icon.png'), // App icon
-    title: 'Document Sorter v1.0.0'
   });
 
-  // Load the index.html file from the renderer directory
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   // Open DevTools in development (optional)
@@ -58,6 +253,15 @@ function createWindow() {
   // Emitted when the window is closed
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Test Sharp functionality
+  testSharpFunctionality().then((sharpWorking) => {
+    if (sharpWorking) {
+      console.log('🔧 Sharp is fully functional');
+    } else {
+      console.log('📝 Sharp is not functional, using fallback image processing');
+    }
   });
 
   // Initialize enhanced parsing service
@@ -231,21 +435,18 @@ function createMenu() {
 }
 
 // This method will be called when Electron has finished initialization
-app.whenReady().then(createWindow);
+fs.appendFileSync(logPath, '✅ Reached before app.whenReady()\n');
+app.whenReady().then(() => {
+  fs.appendFileSync(logPath, '🚀 Entered app.whenReady()\n');
+  createWindow();
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
 
 // Quit when all windows are closed
 app.on('window-all-closed', () => {
-  // On macOS, keep the app running even when all windows are closed
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  // On macOS, re-create a window when the dock icon is clicked
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
 // Handle file dialog opening
@@ -483,18 +684,11 @@ async function extractTextFromImage(filePath) {
   console.log(`Processing image: ${path.basename(filePath)}`);
   
   try {
-    // Pre-process image with sharp: grayscale, binarize, upscale for ~300DPI
     let preprocessedBuffer;
+    
+    // Use the appropriate image processor (Sharp or fallback)
     try {
-      const meta = await sharp(filePath).metadata();
-      let pipeline = sharp(filePath).grayscale().threshold(180);
-      
-      // Upscale if image is too small for good OCR
-      if (meta && meta.width && meta.width < 2000) {
-        pipeline = pipeline.resize({ width: 2000, withoutEnlargement: false });
-      }
-      
-      preprocessedBuffer = await pipeline.png().toBuffer();
+      preprocessedBuffer = await imageProcessor.preprocessImage(filePath);
       console.log(`Image preprocessing completed: ${preprocessedBuffer.length} bytes`);
     } catch (preprocessError) {
       console.warn(`Image preprocessing failed: ${preprocessError.message}, using original file`);

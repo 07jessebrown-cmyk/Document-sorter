@@ -2,9 +2,13 @@
   "name": "document-sorter",
   "version": "1.0.0",
   "description": "A desktop application for sorting documents using drag and drop",
-  "main": "src/main/main.js",
+  "main": "src/main/main-enhanced.js",
   "scripts": {
     "start": "electron .",
+    "rebuild": "npx electron-rebuild",
+    "build:mac": "npx electron-builder --mac --x64 --arm64",
+    "build:win": "npx electron-builder --win --x64",
+    "build:all": "npx electron-builder --mac --win --x64 --arm64",
     "dev": "NODE_ENV=development electron .",
     "build": "electron-builder",
     "test": "jest",
@@ -17,10 +21,24 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:all": "npm run test:ci && npm run test:e2e",
+    "test:security": "node tests/security/run-security-tests.js",
+    "test:security:unit": "jest --config tests/security/jest.config.js",
+    "test:security:penetration": "node tests/security/penetration-tests.js",
+    "test:security:integrity": "node tests/security/integrity-verification-tests.js",
+    "test:security:deployment": "node tests/security/deployment-validation-tests.js",
+    "test:security:coverage": "jest --config tests/security/jest.config.js --coverage",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "dist": "electron-builder --publish=never",
+    "dist:mac": "electron-builder --mac --publish=never",
+    "dist:win": "electron-builder --win --publish=never",
+    "dist:linux": "electron-builder --linux --publish=never",
+    "validate:sharp": "node scripts/validate-sharp.js",
+    "verify:installers": "node scripts/verify-installers.js",
+    "test:packaged-sharp": "node scripts/test-packaged-sharp.js",
+    "rebuild:sharp": "bash scripts/rebuild-sharp-safe.sh",
     "ci": "npm run lint && npm run test:ci",
+    "ci:security": "npm run lint && npm run test:ci && npm run test:security",
     "rollout": "node scripts/rollout-manager.js",
     "rollout:status": "node scripts/rollout-manager.js status",
     "rollout:add-user": "node scripts/rollout-manager.js add-user",
@@ -49,7 +67,7 @@
     "jest": "^29.7.0"
   },
   "dependencies": {
-    "franc": "^5.0.0",
+    "franc": "^6.2.0",
     "mammoth": "^1.6.0",
     "mime-types": "^2.1.35",
     "natural": "^6.7.0",
@@ -62,63 +80,34 @@
     "appId": "com.jessebrown.document-sorter",
     "productName": "Document Sorter",
     "copyright": "Copyright © 2025 Jesse Brown",
+    "asar": true,
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "files": [
       "src/**/*",
-      "config/**/*",
       "package.json",
-      "!**/node_modules/**/*",
-      "!tests/**/*",
-      "!coverage/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "config/",
-        "to": "config/"
-      }
+      "node_modules/**/*",
+      "config/**/*",
+      "build/**/*",
+      "eng.traineddata"
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "build/icon.icns",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
     },
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
-      ],
-      "icon": "build/icon.ico"
-    },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build/icon.png"
+      "target": ["nsis", "zip"],
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
     }
   }
 }

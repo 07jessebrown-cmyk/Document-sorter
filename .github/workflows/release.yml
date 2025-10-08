@@ -1,0 +1,104 @@
+name: Release Document Sorter
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            artifact: '*.dmg'
+          - os: windows-latest
+            platform: win
+            artifact: '*.exe'
+          - os: ubuntu-latest
+            platform: linux
+            artifact: '*.AppImage'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build application
+      run: |
+        if [ "${{ matrix.platform }}" = "mac" ]; then
+          npm run dist -- -m
+        elif [ "${{ matrix.platform }}" = "win" ]; then
+          npm run dist -- -w
+        else
+          npm run dist -- -l
+        fi
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.platform }}-build
+        path: dist/${{ matrix.artifact }}
+        retention-days: 30
+
+  create-release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+        
+    - name: Upload macOS DMG
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./mac-build/*.dmg
+        asset_name: Document-Sorter-${{ github.ref_name }}-macOS.dmg
+        asset_content_type: application/octet-stream
+        
+    - name: Upload Windows EXE
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./win-build/*.exe
+        asset_name: Document-Sorter-${{ github.ref_name }}-Windows.exe
+        asset_content_type: application/octet-stream
+        
+    - name: Upload Linux AppImage
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./linux-build/*.AppImage
+        asset_name: Document-Sorter-${{ github.ref_name }}-Linux.AppImage
+        asset_content_type: application/octet-stream
