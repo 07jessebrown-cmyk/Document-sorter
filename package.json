@@ -71,6 +71,7 @@
     "mammoth": "^1.6.0",
     "mime-types": "^2.1.35",
     "natural": "^6.7.0",
+    "ollama": "^0.6.0",
     "pdf-parse": "^1.1.1",
     "puppeteer": "^24.22.2",
     "sharp": "^0.33.5",
@@ -95,12 +96,18 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.png",
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
     },
     "win": {
-      "target": ["nsis", "zip"],
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "icon": "build/icon.png",
       "artifactName": "${productName}-${version}-win-${arch}.${ext}"
     },
