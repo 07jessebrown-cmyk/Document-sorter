@@ -5,7 +5,6 @@ const AICache = require('./aiCache');
 const ConfigService = require('./configService');
 const TableExtractorService = require('./tableExtractor');
 const OCRService = require('./ocrService');
-const LanguageService = require('./langService');
 const HandwritingService = require('./handwritingService');
 const WatermarkService = require('./watermarkService');
 const TelemetryService = require('./telemetryService');
@@ -79,11 +78,6 @@ class EnhancedParsingService extends ParsingService {
     }
     
     // Initialize language detection service
-    this.languageService = new LanguageService({
-      debug: this.configService.get('debug', false),
-      minConfidence: this.configService.get('language.minConfidence', 0.1),
-      fallbackLanguage: this.configService.get('language.fallbackLanguage', 'eng')
-    });
     
     // Initialize handwriting service if enabled
     this.handwritingService = null;
@@ -424,17 +418,14 @@ class EnhancedParsingService extends ParsingService {
         
         try {
           // Detect language for AI processing
-          const languageInfo = await this.detectLanguage(text);
           const aiOptions = {
             ...options,
-            detectedLanguage: languageInfo.detectedLanguage,
-            languageName: languageInfo.languageName
           };
           
           const aiResult = await this.processWithAI(text, filePath, aiOptions);
           if (aiResult) {
             // Merge AI results with regex results and table data
-            const mergedResult = this.mergeResults(enhancedRegexResult, aiResult, tableData, languageInfo);
+            const mergedResult = this.mergeResults(enhancedRegexResult, aiResult, tableData);
             this.stats.averageConfidence = this.updateAverageConfidence(mergedResult.confidence);
             
             // Track AI processing completion
@@ -513,34 +504,6 @@ class EnhancedParsingService extends ParsingService {
    * @param {string} text - Text to analyze
    * @returns {Promise<Object>} Language detection result
    */
-  async detectLanguage(text) {
-    if (!text || text.trim().length === 0) {
-      return {
-        detectedLanguage: 'eng',
-        languageName: 'English',
-        confidence: 0,
-        success: false
-      };
-    }
-
-    try {
-      const result = await this.languageService.detectLanguage(text);
-      return {
-        detectedLanguage: result.detectedLanguage || 'eng',
-        languageName: result.languageName || 'English',
-        confidence: result.confidence || 0,
-        success: result.success || false
-      };
-    } catch (error) {
-      console.warn('Language detection failed:', error.message);
-      return {
-        detectedLanguage: 'eng',
-        languageName: 'English',
-        confidence: 0,
-        success: false
-      };
-    }
-  }
 
   /**
    * Extract tables from PDF file
@@ -917,7 +880,7 @@ class EnhancedParsingService extends ParsingService {
    * @param {Object} languageInfo - Language detection result (optional)
    * @returns {Object} Merged result with enhanced confidence scoring
    */
-  mergeResults(regexResult, aiResult, tableResult = null, languageInfo = null) {
+  mergeResults(regexResult, aiResult, tableResult = null) {
     const merged = { ...regexResult };
     
     // Initialize field sources tracking
@@ -1073,7 +1036,7 @@ class EnhancedParsingService extends ParsingService {
    * @returns {Object} Merged field result with value, confidence, and source
    * @private
    */
-  mergeField(fieldName, regexValue, regexConfidence, regexSource, tableValue, tableConfidence, tableSource, aiValue, aiConfidence, aiSource, languageInfo = null) {
+  mergeField(fieldName, regexValue, regexConfidence, regexSource, tableValue, tableConfidence, tableSource, aiValue, aiConfidence, aiSource) {
     // Priority: regex > table > AI
     // But if regex has no value or very low confidence, use the best available
     
@@ -1088,10 +1051,6 @@ class EnhancedParsingService extends ParsingService {
     }
     
     // Bilingual mode logic: if we're in bilingual mode and regex confidence is low, prefer AI
-    const isBilingualMode = languageInfo && 
-      languageInfo.detectedLanguage && 
-      languageInfo.detectedLanguage !== 'eng' && 
-      languageInfo.confidence > 0.5;
     
     if (isBilingualMode && fieldName === 'clientName' && regexConfidence < 0.5 && aiValue) {
       return { value: aiValue, confidence: aiConfidence, source: aiSource };
@@ -1191,11 +1150,8 @@ class EnhancedParsingService extends ParsingService {
         const batchPromises = batch.map(async ({ index, doc, result }) => {
           try {
             // Detect language for AI processing
-            const languageInfo = await this.detectLanguage(doc.text);
             const aiOptions = {
               ...options,
-              detectedLanguage: languageInfo.detectedLanguage,
-              languageName: languageInfo.languageName
             };
             
             const aiResult = await this.processWithAI(doc.text, doc.filePath, aiOptions);
@@ -1214,7 +1170,7 @@ class EnhancedParsingService extends ParsingService {
                 titleConfidence: result.titleConfidence
               } : null;
               
-              results[index] = this.mergeResults(result, aiResult, tableData, languageInfo);
+              results[index] = this.mergeResults(result, aiResult, tableData);
               this.stats.aiProcessed++;
             } else {
               results[index] = result;
@@ -1426,9 +1382,6 @@ class EnhancedParsingService extends ParsingService {
       await this.close();
       
       // Close language service
-      if (this.languageService) {
-        await this.languageService.close();
-        this.languageService = null;
       }
       
       // Close handwriting service

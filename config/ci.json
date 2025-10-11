@@ -28,7 +28,6 @@
         ]
       },
       "languageDetection": {
-        "language": "en",
         "confidence": 0.98
       },
       "signatureDetection": {

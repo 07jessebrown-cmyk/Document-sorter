@@ -13,8 +13,6 @@
  * @param {string} options.model - AI model being used (for model-specific instructions)
  * @param {boolean} options.includeExamples - Whether to include examples in prompt
  * @param {number} options.maxTokens - Maximum tokens for response
- * @param {string} options.detectedLanguage - Detected language code (e.g., 'eng', 'spa', 'fra')
- * @param {string} options.languageName - Human-readable language name (e.g., 'English', 'Spanish')
  * @returns {Object} Prompt object with messages array for LLM call
  */
 function buildMetadataPrompt(text, options = {}) {
@@ -22,8 +20,8 @@ function buildMetadataPrompt(text, options = {}) {
     model = 'gpt-3.5-turbo',
     includeExamples = true,
     maxTokens = 1000,
-    detectedLanguage = null,
-    languageName = null,
+    
+    
     hasTableData = false,
     tableContext = null
   } = options;
@@ -34,8 +32,8 @@ function buildMetadataPrompt(text, options = {}) {
     ? text.substring(0, maxTextLength) + '\n\n[Text truncated...]'
     : text;
 
-  const systemPrompt = buildSystemPrompt(model, includeExamples, detectedLanguage, languageName, hasTableData, tableContext);
-  const userPrompt = buildUserPrompt(truncatedText, detectedLanguage, languageName, hasTableData, tableContext);
+  const systemPrompt = buildSystemPrompt(model, includeExamples, hasTableData, tableContext);
+  const userPrompt = buildUserPrompt(truncatedText, hasTableData, tableContext);
 
   return {
     messages: [
@@ -58,22 +56,17 @@ function buildMetadataPrompt(text, options = {}) {
  * Build the system prompt with instructions and examples
  * @param {string} model - AI model being used
  * @param {boolean} includeExamples - Whether to include examples
- * @param {string} detectedLanguage - Detected language code (optional)
- * @param {string} languageName - Human-readable language name (optional)
  * @returns {string} System prompt content
  */
-function buildSystemPrompt(model, includeExamples = true, detectedLanguage = null, languageName = null, hasTableData = false, tableContext = null) {
+function buildSystemPrompt(model, includeExamples = true,   hasTableData = false, tableContext = null) {
   // Add language-specific instructions if language is detected
-  const languageContext = detectedLanguage && languageName 
-    ? `\nLANGUAGE CONTEXT: The document appears to be written in ${languageName} (${detectedLanguage}). Please consider this when extracting metadata and interpreting document structure.`
-    : '';
 
   // Add table context if table data is present
   const tableContextHint = hasTableData 
     ? `\nTABLE CONTEXT: This document contains structured table data. Pay special attention to table headers, rows, and cells when extracting client names, dates, and document types. Table data often contains the most reliable metadata.`
     : '';
 
-  const baseInstructions = `You are a document metadata extraction assistant. Your task is to analyze document text and extract structured information about the client, date, and document type.${languageContext}${tableContextHint}
+  const baseInstructions = `You are a document metadata extraction assistant. Your task is to analyze document text and extract structured information about the client, date, and document type.${tableContextHint}
 
 CRITICAL REQUIREMENTS:
 1. You MUST respond with ONLY valid JSON
@@ -151,20 +144,15 @@ Output: {
 /**
  * Build the user prompt with the document text
  * @param {string} text - Document text to analyze
- * @param {string} detectedLanguage - Detected language code (optional)
- * @param {string} languageName - Human-readable language name (optional)
  * @returns {string} User prompt content
  */
-function buildUserPrompt(text, detectedLanguage = null, languageName = null, hasTableData = false, tableContext = null) {
-  const languageHint = detectedLanguage && languageName 
-    ? `\nNote: This document appears to be in ${languageName}. Please consider this when extracting metadata.`
-    : '';
+function buildUserPrompt(text,   hasTableData = false, tableContext = null) {
 
   const tableHint = hasTableData 
     ? `\nNote: This document contains table data. Focus on table content for the most accurate metadata extraction.`
     : '';
 
-  return `Please analyze the following document text and extract the metadata as specified in the system instructions. Respond with ONLY the JSON object, no additional text.${languageHint}${tableHint}
+  return `Please analyze the following document text and extract the metadata as specified in the system instructions. Respond with ONLY the JSON object, no additional text.${tableHint}
 
 DOCUMENT TEXT:
 ${text}`;

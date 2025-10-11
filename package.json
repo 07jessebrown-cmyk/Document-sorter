@@ -67,7 +67,6 @@
     "jest": "^29.7.0"
   },
   "dependencies": {
-    "franc": "^6.2.0",
     "mammoth": "^1.6.0",
     "mime-types": "^2.1.35",
     "natural": "^6.7.0",
