@@ -1,3 +1,27 @@
+// Enable comprehensive debugging in renderer
+console.log('🔧 Renderer script loaded with debugging enabled');
+console.log('📊 DOM elements check:', {
+  dropZone: !!document.getElementById('dropZone'),
+  fileList: !!document.getElementById('fileList'),
+  fileListItems: !!document.getElementById('fileListItems'),
+  previewTable: !!document.getElementById('previewTable'),
+  previewTableBody: !!document.getElementById('previewTableBody'),
+  status: !!document.getElementById('status'),
+  browseBtn: !!document.getElementById('browseBtn'),
+  startSortingBtn: !!document.getElementById('startSortingBtn'),
+  settingsBtn: !!document.getElementById('settingsBtn')
+});
+
+// Log CSS loading
+console.log('🎨 CSS files loaded:', document.styleSheets.length);
+for (let i = 0; i < document.styleSheets.length; i++) {
+  try {
+    console.log(`  CSS ${i + 1}: ${document.styleSheets[i].href || 'inline'}`);
+  } catch (e) {
+    console.log(`  CSS ${i + 1}: (cross-origin or error)`);
+  }
+}
+
 // DOM elements
 const dropZone = document.getElementById('dropZone');
 const fileList = document.getElementById('fileList');

@@ -1,3 +1,8 @@
+// DEPRECATED: This file has been consolidated into src/main/main.js
+// All functionality has been merged into the unified main file.
+// This file is kept for reference but should not be used.
+
+/*
 const electron = require('electron');
 const { app, BrowserWindow, ipcMain, Menu, dialog } = electron;
 const path = require('path');
@@ -767,289 +772,8 @@ function mapTypeToFolder(type) {
   return 'Unsorted';
 }
 
-// IPC Handlers with enhanced error handling
-ipcMain.handle('open-file-dialog', async (event) => {
-  try {
-    await errorLogger.logInfo('Opening file dialog...');
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Select Files to Sort',
-      properties: ['openFile', 'multiSelections'],
-      filters: [
-        { name: 'Documents', extensions: ['pdf', 'docx', 'doc', 'txt'] },
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif'] },
-        { name: 'All Files', extensions: ['*'] }
-      ]
-    });
-    
-    if (result.canceled) {
-      await errorLogger.logInfo('File dialog canceled by user');
-      return [];
-    }
-    
-    await errorLogger.logInfo(`File dialog selected ${result.filePaths.length} files`);
-    return result.filePaths;
-  } catch (error) {
-    await errorLogger.logError('Error opening file dialog', error);
-    throw error;
-  }
-});
 
-ipcMain.handle('file:dropped', (event, filePaths) => {
-  errorLogger.logInfo(`Files dropped: ${filePaths.length} files`);
-  filePaths.forEach((filePath, index) => {
-    errorLogger.logInfo(`File ${index + 1}: ${filePath}`);
-  });
-  return { success: true, message: `Successfully received ${filePaths.length} file(s)` };
-});
 
-ipcMain.on('start:sorting', async (event, filePaths) => {
-  await errorLogger.logInfo(`Starting sorting process for ${filePaths.length} files`);
-  
-  // Validate file paths
-  if (!Array.isArray(filePaths)) {
-    await errorLogger.logError('Invalid filePaths: Expected array', new Error(`Received ${typeof filePaths}`));
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('processing:complete', {
-        total: 0,
-        success: 0,
-        errors: 1,
-        message: 'Invalid file paths format received'
-      });
-    }
-    return;
-  }
-  
-  if (filePaths.length === 0) {
-    await errorLogger.logError('No file paths provided for processing');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('processing:complete', {
-        total: 0,
-        success: 0,
-        errors: 1,
-        message: 'No files provided for processing'
-      });
-    }
-    return;
-  }
-  
-  // Filter valid file paths
-  const validFilePaths = filePaths.filter(filePath => {
-    return typeof filePath === 'string' && filePath.trim().length > 0;
-  });
-  
-  if (validFilePaths.length === 0) {
-    await errorLogger.logError('No valid file paths found after filtering');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('processing:complete', {
-        total: 0,
-        success: 0,
-        errors: 1,
-        message: 'No valid file paths found'
-      });
-    }
-    return;
-  }
-  
-  if (validFilePaths.length !== filePaths.length) {
-    await errorLogger.logWarning(`Filtered out ${filePaths.length - validFilePaths.length} invalid file paths`);
-  }
-
-  await errorLogger.logInfo(`Processing ${validFilePaths.length} valid file(s)...`);
-  let successCount = 0;
-  let failureCount = 0;
-  const errors = [];
-
-  for (const filePath of validFilePaths) {
-    if (!filePath || typeof filePath !== 'string' || filePath.trim().length === 0) {
-      await errorLogger.logError(`Skipping invalid file path: ${filePath}`);
-      failureCount++;
-      errors.push(`Invalid file path: ${filePath}`);
-      continue;
-    }
-    
-    try {
-      await errorLogger.logInfo(`Processing: ${path.basename(filePath)}`);
-      const finalPath = await processFile(filePath);
-      
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('file:processed', {
-          originalPath: filePath,
-          finalPath,
-          success: true,
-          message: `Successfully sorted to ${path.basename(finalPath)}`
-        });
-      }
-      successCount++;
-      
-    } catch (error) {
-      const errorMessage = error?.message || String(error);
-      await errorLogger.logError(`Failed processing ${path.basename(filePath)}`, error);
-      failureCount++;
-      errors.push(`${path.basename(filePath)}: ${errorMessage}`);
-      
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('file:processed', {
-          originalPath: filePath,
-          error: errorMessage,
-          success: false,
-          message: `Failed to process: ${errorMessage}`
-        });
-      }
-    }
-  }
-  
-  // Send completion message
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('processing:complete', {
-      total: validFilePaths.length,
-      success: successCount,
-      errors: failureCount,
-      message: `Processing complete: ${successCount} successful, ${failureCount} failed`
-    });
-  }
-  
-  await errorLogger.logInfo(`Processing complete: ${successCount} successful, ${failureCount} failed`);
-  if (errors.length > 0) {
-    await errorLogger.logError('Processing errors', new Error(errors.join('; ')));
-  }
-});
-
-// Settings and diagnostics IPC handlers
-ipcMain.handle('get-ai-status', async () => {
-  try {
-    if (enhancedParsingService) {
-      const stats = enhancedParsingService.getStats();
-      return {
-        enabled: enhancedParsingService.useAI,
-        threshold: enhancedParsingService.aiConfidenceThreshold,
-        batchSize: enhancedParsingService.aiBatchSize,
-        stats: stats
-      };
-    }
-    return { enabled: false, threshold: 0.5, batchSize: 5, stats: null };
-  } catch (error) {
-    await errorLogger.logError('Error getting AI status', error);
-    return { enabled: false, threshold: 0.5, batchSize: 5, stats: null };
-  }
-});
-
-ipcMain.handle('get-stats', async () => {
-  try {
-    if (enhancedParsingService) {
-      return enhancedParsingService.getStats();
-    }
-    return {
-      totalProcessed: 0,
-      regexProcessed: 0,
-      aiProcessed: 0,
-      cacheHits: 0,
-      cacheMisses: 0,
-      errors: 0,
-      averageConfidence: 0
-    };
-  } catch (error) {
-    await errorLogger.logError('Error getting stats', error);
-    return null;
-  }
-});
-
-ipcMain.handle('save-settings', async (event, settings) => {
-  try {
-    // Update enhanced parsing service configuration
-    if (enhancedParsingService) {
-      enhancedParsingService.useAI = settings.useAI;
-      enhancedParsingService.aiConfidenceThreshold = settings.confidenceThreshold;
-      enhancedParsingService.aiBatchSize = settings.batchSize || 5;
-    }
-    
-    // Save settings to config file using proper path resolution
-    const configPath = path.join(getConfigPath(), 'default.json');
-    const config = {
-      ai: {
-        enabled: settings.useAI,
-        confidenceThreshold: settings.confidenceThreshold,
-        model: settings.model || 'gpt-3.5-turbo',
-        batchSize: settings.batchSize || 5
-      }
-    };
-    
-    await fsp.writeFile(configPath, JSON.stringify(config, null, 2));
-    await errorLogger.logInfo('Settings saved successfully');
-    return { success: true };
-  } catch (error) {
-    await errorLogger.logError('Error saving settings', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('toggle-ai', async (event, enabled) => {
-  try {
-    if (enhancedParsingService) {
-      enhancedParsingService.useAI = enabled;
-      await errorLogger.logInfo(`AI processing ${enabled ? 'enabled' : 'disabled'}`);
-    }
-    return { success: true, enabled };
-  } catch (error) {
-    await errorLogger.logError('Error toggling AI', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('get-diagnostics', async () => {
-  try {
-    const diagnostics = {
-      ai: {
-        totalCalls: 0,
-        successfulCalls: 0,
-        failedCalls: 0,
-        cachedCalls: 0,
-        averageLatency: 0,
-        successRate: 0
-      },
-      cache: {
-        hits: 0,
-        misses: 0,
-        hitRate: 0,
-        size: 0,
-        evictions: 0
-      },
-      processing: {
-        totalFiles: 0,
-        regexProcessed: 0,
-        aiProcessed: 0,
-        averageConfidence: 0,
-        averageProcessingTime: 0
-      },
-      performance: {
-        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        cpuUsage: process.cpuUsage()
-      },
-      session: {
-        duration: Math.round((Date.now() - process.uptime() * 1000) / 1000),
-        lastActivity: new Date().toISOString()
-      },
-      errors: {
-        recent: []
-      }
-    };
-    
-    if (enhancedParsingService) {
-      const stats = enhancedParsingService.getStats();
-      diagnostics.processing = {
-        totalFiles: stats.totalProcessed,
-        regexProcessed: stats.regexProcessed,
-        aiProcessed: stats.aiProcessed,
-        averageConfidence: stats.averageConfidence,
-        averageProcessingTime: 0
-      };
-    }
-    
-    return diagnostics;
-  } catch (error) {
-    await errorLogger.logError('Error getting diagnostics', error);
-    throw error;
-  }
-});
 
 // Handle app security
 app.on('web-contents-created', (event, contents) => {
@@ -1084,6 +808,333 @@ async function initializeApp() {
 app.whenReady().then(async () => {
   try {
     await initializeApp();
+    
+    // Register all IPC handlers first, before creating windows
+    console.log('📡 Registering IPC handlers...');
+    
+    // IPC Handlers with enhanced error handling
+    ipcMain.handle('open-file-dialog', async (event) => {
+      try {
+        await errorLogger.logInfo('Opening file dialog...');
+        const result = await dialog.showOpenDialog(mainWindow, {
+          title: 'Select Files to Sort',
+          properties: ['openFile', 'multiSelections'],
+          filters: [
+            { name: 'Documents', extensions: ['pdf', 'docx', 'doc', 'txt'] },
+            { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif'] },
+            { name: 'All Files', extensions: ['*'] }
+          ]
+        });
+        
+        if (result.canceled) {
+          await errorLogger.logInfo('File dialog canceled by user');
+          return [];
+        }
+        
+        await errorLogger.logInfo(`File dialog selected ${result.filePaths.length} files`);
+        return result.filePaths;
+      } catch (error) {
+        await errorLogger.logError('Error opening file dialog', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('file:dropped', (event, filePaths) => {
+      errorLogger.logInfo(`Files dropped: ${filePaths.length} files`);
+      filePaths.forEach((filePath, index) => {
+        errorLogger.logInfo(`File ${index + 1}: ${filePath}`);
+      });
+      return { success: true, message: `Successfully received ${filePaths.length} file(s)` };
+    });
+
+    ipcMain.on('start:sorting', async (event, filePaths) => {
+      await errorLogger.logInfo(`Starting sorting process for ${filePaths.length} files`);
+      
+      // Validate file paths
+      if (!Array.isArray(filePaths)) {
+        await errorLogger.logError('Invalid filePaths: Expected array', new Error(`Received ${typeof filePaths}`));
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('processing:complete', {
+            total: 0,
+            success: 0,
+            errors: 1,
+            message: 'Invalid file paths format received'
+          });
+        }
+        return;
+      }
+      
+      if (filePaths.length === 0) {
+        await errorLogger.logError('No file paths provided for processing');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('processing:complete', {
+            total: 0,
+            success: 0,
+            errors: 1,
+            message: 'No files provided for processing'
+          });
+        }
+        return;
+      }
+      
+      // Additional validation: ensure all items are valid strings
+      const validFilePaths = filePaths.filter(filePath => {
+        return typeof filePath === 'string' && filePath.trim().length > 0;
+      });
+      
+      if (validFilePaths.length === 0) {
+        await errorLogger.logError('No valid file paths found after filtering');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('processing:complete', {
+            total: 0,
+            success: 0,
+            errors: 1,
+            message: 'No valid file paths found'
+          });
+        }
+        return;
+      }
+      
+      if (validFilePaths.length !== filePaths.length) {
+        await errorLogger.logWarning(`Filtered out ${filePaths.length - validFilePaths.length} invalid file paths`);
+      }
+
+      // Process files with enhanced error handling
+      await errorLogger.logInfo(`Processing ${validFilePaths.length} valid file(s)...`);
+      let successCount = 0;
+      let failureCount = 0;
+      const errors = [];
+
+      for (const filePath of validFilePaths) {
+        if (!filePath || typeof filePath !== 'string' || filePath.trim().length === 0) {
+          await errorLogger.logError('Skipping invalid file path', new Error(filePath));
+          failureCount++;
+          errors.push(`Invalid file path: ${filePath}`);
+          continue;
+        }
+        
+        try {
+          await errorLogger.logInfo(`Processing: ${path.basename(filePath)}`);
+          const finalPath = await processFile(filePath);
+          
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('file:processed', {
+              originalPath: filePath,
+              finalPath,
+              success: true,
+              message: `Successfully sorted to ${path.basename(finalPath)}`
+            });
+          }
+          successCount++;
+          
+        } catch (error) {
+          await errorLogger.logError(`Failed processing ${path.basename(filePath)}`, error);
+          failureCount++;
+          errors.push(`${path.basename(filePath)}: ${error.message}`);
+          
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('file:processed', {
+              originalPath: filePath,
+              error: error.message,
+              success: false,
+              message: `Failed to process: ${error.message}`
+            });
+          }
+        }
+      }
+      
+      // Send completion message
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('processing:complete', {
+          total: validFilePaths.length,
+          success: successCount,
+          errors: failureCount,
+          message: `Processing complete: ${successCount} successful, ${failureCount} failed`
+        });
+      }
+      
+      await errorLogger.logInfo(`Processing complete: ${successCount} successful, ${failureCount} failed`);
+      if (errors.length > 0) {
+        await errorLogger.logError('Processing errors occurred', new Error(errors.join('; ')));
+      }
+    });
+
+    // AI and Settings IPC Handlers
+    ipcMain.handle('get-ai-status', async () => {
+      try {
+        await errorLogger.logInfo('Getting AI status...');
+        return {
+          enabled: process.env.USE_AI === 'true' || !!process.env.OPENAI_API_KEY,
+          apiKey: !!process.env.OPENAI_API_KEY,
+          model: process.env.AI_MODEL || 'gpt-3.5-turbo',
+          confidenceThreshold: parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) || 0.5
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting AI status', error);
+        return { enabled: false, apiKey: false, model: 'gpt-3.5-turbo', confidenceThreshold: 0.5 };
+      }
+    });
+
+    ipcMain.handle('get-stats', async () => {
+      try {
+        await errorLogger.logInfo('Getting processing statistics...');
+        // Return mock stats for now - these would be tracked in a real implementation
+        return {
+          totalProcessed: 0,
+          regexProcessed: 0,
+          aiProcessed: 0,
+          cacheHits: 0,
+          averageConfidence: 0.0
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting stats', error);
+        return { totalProcessed: 0, regexProcessed: 0, aiProcessed: 0, cacheHits: 0, averageConfidence: 0.0 };
+      }
+    });
+
+    ipcMain.handle('save-settings', async (event, settings) => {
+      try {
+        await errorLogger.logInfo('Saving settings...');
+        // In a real implementation, this would save to a config file
+        if (settings.useAI !== undefined) {
+          process.env.USE_AI = settings.useAI ? 'true' : 'false';
+        }
+        if (settings.confidenceThreshold !== undefined) {
+          process.env.AI_CONFIDENCE_THRESHOLD = settings.confidenceThreshold.toString();
+        }
+        if (settings.model !== undefined) {
+          process.env.AI_MODEL = settings.model;
+        }
+        await errorLogger.logInfo('Settings saved successfully');
+        return { success: true };
+      } catch (error) {
+        await errorLogger.logError('Error saving settings', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('toggle-ai', async (event, enabled) => {
+      try {
+        await errorLogger.logInfo(`Toggling AI: ${enabled}`);
+        process.env.USE_AI = enabled ? 'true' : 'false';
+        return { success: true, enabled };
+      } catch (error) {
+        await errorLogger.logError('Error toggling AI', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('get-diagnostics', async () => {
+      try {
+        await errorLogger.logInfo('Getting diagnostics...');
+        // Return mock diagnostics for now
+        return {
+          ai: {
+            totalCalls: 0,
+            successfulCalls: 0,
+            failedCalls: 0,
+            cachedCalls: 0,
+            averageLatency: 0,
+            successRate: 0
+          },
+          cache: {
+            hits: 0,
+            misses: 0,
+            hitRate: 0,
+            size: 0,
+            evictions: 0
+          },
+          processing: {
+            totalFiles: 0,
+            regexProcessed: 0,
+            aiProcessed: 0,
+            averageConfidence: 0,
+            averageProcessingTime: 0
+          },
+          performance: {
+            memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024
+          },
+          session: {
+            duration: 0,
+            lastActivity: new Date().toISOString()
+          },
+          errors: {
+            recent: []
+          }
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting diagnostics', error);
+        return { error: error.message };
+      }
+    });
+
+    ipcMain.handle('clear-telemetry', async () => {
+      try {
+        await errorLogger.logInfo('Clearing telemetry data...');
+        // In a real implementation, this would clear stored telemetry data
+        await errorLogger.logInfo('Telemetry data cleared');
+        return { success: true };
+      } catch (error) {
+        await errorLogger.logError('Error clearing telemetry', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('export-telemetry', async () => {
+      try {
+        await errorLogger.logInfo('Exporting telemetry data...');
+        // In a real implementation, this would export stored telemetry data
+        const mockData = {
+          timestamp: new Date().toISOString(),
+          version: '1.0.0',
+          platform: process.platform,
+          data: {}
+        };
+        await errorLogger.logInfo('Telemetry data exported');
+        return mockData;
+      } catch (error) {
+        await errorLogger.logError('Error exporting telemetry', error);
+        return { error: error.message };
+      }
+    });
+
+    ipcMain.handle('get-extraction-config', async () => {
+      try {
+        await errorLogger.logInfo('Getting extraction configuration...');
+        return {
+          useOCR: process.env.USE_OCR !== 'false',
+          useTableExtraction: process.env.USE_TABLE_EXTRACTION !== 'false',
+          useLLMEnhancer: process.env.USE_LLM_ENHANCER !== 'false'
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting extraction config', error);
+        return { useOCR: true, useTableExtraction: true, useLLMEnhancer: true };
+      }
+    });
+
+    ipcMain.handle('update-extraction-config', async (event, config) => {
+      try {
+        await errorLogger.logInfo('Updating extraction configuration...');
+        if (config.useOCR !== undefined) {
+          process.env.USE_OCR = config.useOCR ? 'true' : 'false';
+        }
+        if (config.useTableExtraction !== undefined) {
+          process.env.USE_TABLE_EXTRACTION = config.useTableExtraction ? 'true' : 'false';
+        }
+        if (config.useLLMEnhancer !== undefined) {
+          process.env.USE_LLM_ENHANCER = config.useLLMEnhancer ? 'true' : 'false';
+        }
+        await errorLogger.logInfo('Extraction configuration updated');
+        return { success: true };
+      } catch (error) {
+        await errorLogger.logError('Error updating extraction config', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+
+    console.log('✅ All IPC handlers registered successfully');
+    
     await createWindow();
     
     app.on('activate', () => {

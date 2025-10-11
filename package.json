@@ -2,7 +2,7 @@
   "name": "document-sorter",
   "version": "1.0.0",
   "description": "A desktop application for sorting documents using drag and drop",
-  "main": "src/main/main-enhanced.js",
+  "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "rebuild": "npx electron-rebuild",

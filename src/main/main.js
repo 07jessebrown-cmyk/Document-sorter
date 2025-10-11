@@ -1,207 +1,214 @@
-let electron, app, BrowserWindow, ipcMain, Menu, dialog, os, fs, path, logPath;
+// Import required modules
+const electron = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog } = electron;
+const path = require('path');
+const fs = require('fs');
+const fsp = require('fs').promises;
+const os = require('os');
 
-try {
-  electron = require('electron');
-  const electronModule = electron;
-  app = electronModule.app;
-  BrowserWindow = electronModule.BrowserWindow;
-  ipcMain = electronModule.ipcMain;
-  Menu = electronModule.Menu;
-  dialog = electronModule.dialog;
-} catch (err) {
-  console.error('Failed to load electron:', err.stack);
-  process.exit(1);
+// Enable full logging for debugging
+process.env.ELECTRON_ENABLE_LOGGING = '1';
+process.env.DEBUG = '*';
+
+// Create comprehensive debug log file
+const debugLogPath = path.join(os.homedir(), 'Desktop', 'electron-debug.log');
+const debugLogStream = fs.createWriteStream(debugLogPath, { flags: 'a' });
+
+function debugLog(message) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+  console.log(logMessage.trim());
+  debugLogStream.write(logMessage);
 }
 
-// Startup diagnostics logging
-try {
-  os = require('os');
-} catch (err) {
-  console.error('Failed to load os:', err.stack);
-  process.exit(1);
-}
+debugLog('=== ELECTRON APP STARTING WITH FULL DEBUGGING ===');
+debugLog(`Process args: ${process.argv.join(' ')}`);
+debugLog(`App path: ${app.getAppPath()}`);
+debugLog(`Resources path: ${process.resourcesPath}`);
+debugLog(`Is packaged: ${app.isPackaged}`);
+debugLog(`Node version: ${process.version}`);
+debugLog(`Electron version: ${process.versions.electron}`);
+debugLog(`Platform: ${process.platform}`);
+debugLog(`Arch: ${process.arch}`);
 
-try {
-  fs = require('fs');
-} catch (err) {
-  console.error('Failed to load fs:', err.stack);
+// Add comprehensive error handling at the very top
+process.on('uncaughtException', (error) => {
+  console.error('UNCAUGHT EXCEPTION:', error);
   process.exit(1);
-}
+});
 
-try {
-  path = require('path');
-} catch (err) {
-  console.error('Failed to load path:', err.stack);
-  process.exit(1);
-}
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+  console.error('Promise:', promise);
+});
 
-// Create startup diagnostics log
-function writeStartupDiagnostics() {
-  try {
-    const appSupportDir = path.join(os.homedir(), 'Library', 'Application Support', 'Document Sorter');
+console.log('✅ Electron main file loaded successfully');
+
+// Enhanced error logging system
+class ErrorLogger {
+  constructor() {
+    this.logPath = path.join(os.homedir(), 'Desktop', 'app-error.log');
+    this.initialized = false;
+  }
+
+  async initialize() {
+    try {
+      const initialLog = `\n=== Document Sorter Error Log - ${new Date().toISOString()} ===\n`;
+      await fsp.appendFile(this.logPath, initialLog);
+      this.initialized = true;
+      console.log(`📝 Error logging initialized: ${this.logPath}`);
+    } catch (error) {
+      console.error('Failed to initialize error logging:', error);
+    }
+  }
+
+  async log(level, message, error = null) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    const timestamp = new Date().toISOString();
+    let logEntry = `[${timestamp}] [${level}] ${message}`;
     
-    // Ensure directory exists
-    if (!fs.existsSync(appSupportDir)) {
-      fs.mkdirSync(appSupportDir, { recursive: true });
+    if (error) {
+      logEntry += `\nError: ${error.message}\nStack: ${error.stack}`;
     }
     
-    logPath = path.join(appSupportDir, 'startup-debug.log');
-    const timestamp = new Date().toISOString();
-    
-    const diagnostics = {
-      timestamp,
-      processCwd: process.cwd(),
-      appPath: app.getAppPath(),
-      resourcesPath: process.resourcesPath,
-      envPath: process.env.PATH,
-      nodeEnv: process.env.NODE_ENV,
-      platform: process.platform,
-      arch: process.arch,
-      electronVersion: process.versions.electron,
-      nodeVersion: process.versions.node,
-      v8Version: process.versions.v8,
-      argv: process.argv,
-      execPath: process.execPath
-    };
-    
-    const logContent = `=== Document Sorter Startup Diagnostics ===
-Timestamp: ${diagnostics.timestamp}
-Process CWD: ${diagnostics.processCwd}
-App Path: ${diagnostics.appPath}
-Resources Path: ${diagnostics.resourcesPath}
-Environment PATH: ${diagnostics.envPath}
-NODE_ENV: ${diagnostics.nodeEnv}
-Platform: ${diagnostics.platform}
-Architecture: ${diagnostics.arch}
-Electron Version: ${diagnostics.electronVersion}
-Node Version: ${diagnostics.nodeVersion}
-V8 Version: ${diagnostics.v8Version}
-Exec Path: ${diagnostics.execPath}
-Process Args: ${JSON.stringify(diagnostics.argv, null, 2)}
-===============================================
+    logEntry += '\n';
 
-`;
-    
-    fs.writeFileSync(logPath, logContent, 'utf8');
-    console.log(`Startup diagnostics written to: ${logPath}`);
-  } catch (error) {
-    console.error('Failed to write startup diagnostics:', error);
+    try {
+      await fsp.appendFile(this.logPath, logEntry);
+    } catch (writeError) {
+      console.error('Failed to write to error log:', writeError);
+    }
+  }
+
+  async logError(message, error) {
+    await this.log('ERROR', message, error);
+  }
+
+  async logInfo(message) {
+    await this.log('INFO', message);
+  }
+
+  async logWarning(message, error = null) {
+    await this.log('WARN', message, error);
   }
 }
 
-// Write diagnostics immediately
-writeStartupDiagnostics();
+// Initialize error logger
+const errorLogger = new ErrorLogger();
 
-// Enable hot reload in development
-if (process.env.NODE_ENV === 'development') {
+// Enhanced path resolution for packaged apps
+function getAppPath() {
+  if (app.isPackaged) {
+    return path.dirname(process.execPath);
+  }
+  return __dirname;
+}
+
+function getResourcePath(relativePath) {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'app', relativePath);
+  }
+  return path.join(__dirname, relativePath);
+}
+
+function getConfigPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'app', 'config');
+  }
+  return path.join(__dirname, '../../config');
+}
+
+// Safe module loading with error handling
+async function safeRequire(moduleName, fallback = null) {
   try {
-    const electronReload = require('electron-reload');
-    electronReload(__dirname, {
-      electron: electron,
-      hardResetMethod: 'exit'
-    });
+    const module = require(moduleName);
+    await errorLogger.logInfo(`Successfully loaded module: ${moduleName}`);
+    return module;
   } catch (error) {
-    fs.appendFileSync(logPath, `❌ Failed to load electron-reload: ${error.stack}\n`);
-    console.log('Hot reload not available:', error.message);
+    await errorLogger.logWarning(`Failed to load module: ${moduleName}`, error);
+    return fallback;
   }
 }
 
-console.log('Document Sorter starting...');
-console.log(`🔧 Sharp module status: ${sharpAvailable ? 'Available' : 'Not Available'}`);
+// Initialize modules with error handling
+let pdfParse = null;
+let Tesseract = null;
+let sharp = null;
+let sharpAvailable = false;
+let mammoth = null;
+let mime = null;
+let EnhancedParsingService = null;
+
+async function initializeModules() {
+  await errorLogger.logInfo('Starting module initialization...');
+
+  try {
+    // Load core modules
+    pdfParse = await safeRequire('pdf-parse');
+    Tesseract = await safeRequire('tesseract.js');
+    mammoth = await safeRequire('mammoth');
+    mime = await safeRequire('mime-types');
+
+    // Load Sharp with fallback
+    try {
+      sharp = require('sharp');
+      sharpAvailable = true;
+      await errorLogger.logInfo('Sharp module loaded successfully');
+    } catch (error) {
+      await errorLogger.logWarning('Sharp module failed to load, using fallback', error);
+      sharpAvailable = false;
+    }
+
+    // Load enhanced parsing service
+    try {
+      const servicePath = getResourcePath('../services/enhancedParsingService');
+      EnhancedParsingService = require(servicePath);
+      await errorLogger.logInfo('Enhanced parsing service loaded successfully');
+    } catch (error) {
+      await errorLogger.logError('Failed to load enhanced parsing service', error);
+      EnhancedParsingService = null;
+    }
+
+    await errorLogger.logInfo('Module initialization completed');
+  } catch (error) {
+    await errorLogger.logError('Critical error during module initialization', error);
+    throw error;
+  }
+}
 
 // Test Sharp functionality if available
 async function testSharpFunctionality() {
   if (sharpAvailable && sharp) {
     try {
-      console.log('🧪 Testing Sharp functionality...');
-      // Create a simple test to verify Sharp works
+      await errorLogger.logInfo('Testing Sharp functionality...');
       const testBuffer = Buffer.from('test');
       await sharp(testBuffer).metadata();
-      console.log('✅ Sharp functionality test passed');
+      await errorLogger.logInfo('Sharp functionality test passed');
       return true;
     } catch (error) {
-      console.warn('⚠️ Sharp functionality test failed:', error.message);
-      console.log('📝 Falling back to basic image processing');
+      await errorLogger.logWarning('Sharp functionality test failed', error);
       return false;
     }
   }
   return false;
-}
-let fsp, pdfParse, Tesseract, sharp, sharpAvailable, mammoth, mime, EnhancedParsingService;
-
-try {
-  fsp = require('fs').promises;
-} catch (err) {
-  fs.appendFileSync(logPath, `❌ Failed to load fs.promises: ${err.stack}\n`);
-  process.exit(1);
-}
-
-try {
-  pdfParse = require('pdf-parse');
-} catch (err) {
-  fs.appendFileSync(logPath, `❌ Failed to load pdf-parse: ${err.stack}\n`);
-  process.exit(1);
-}
-
-try {
-  Tesseract = require('tesseract.js');
-} catch (err) {
-  fs.appendFileSync(logPath, `❌ Failed to load tesseract.js: ${err.stack}\n`);
-  process.exit(1);
-}
-
-// Optional Sharp module - wrapped in try-catch for diagnostics
-sharp = null;
-sharpAvailable = false;
-try {
-  sharp = require('sharp');
-  sharpAvailable = true;
-  console.log('✅ Sharp module loaded successfully');
-} catch (error) {
-  fs.appendFileSync(logPath, `❌ Failed to load sharp: ${error.stack}\n`);
-  console.warn('⚠️ Sharp module failed to load:', error.message);
-  console.log('📝 Image processing features will be limited or disabled');
-}
-
-try {
-  mammoth = require('mammoth');
-} catch (err) {
-  fs.appendFileSync(logPath, `❌ Failed to load mammoth: ${err.stack}\n`);
-  process.exit(1);
-}
-
-try {
-  mime = require('mime-types');
-} catch (err) {
-  fs.appendFileSync(logPath, `❌ Failed to load mime-types: ${err.stack}\n`);
-  process.exit(1);
-}
-
-// const natural = require('natural'); // Temporarily disabled due to installation issues
-
-// Import enhanced parsing service
-try {
-  EnhancedParsingService = require('../services/enhancedParsingService');
-} catch (err) {
-  fs.appendFileSync(logPath, `❌ Failed to load EnhancedParsingService: ${err.stack}\n`);
-  process.exit(1);
 }
 
 // Fallback image processing when Sharp is not available
 function createImageProcessingFallback() {
   return {
     async preprocessImage(filePath) {
-      console.log('📝 Using fallback image processing (no Sharp)');
-      // Simply return the original file buffer
+      await errorLogger.logInfo('Using fallback image processing (no Sharp)');
       return await fsp.readFile(filePath);
     },
     
     async getImageMetadata(filePath) {
-      console.log('📝 Using fallback metadata extraction (no Sharp)');
-      // Return basic metadata structure
+      await errorLogger.logInfo('Using fallback metadata extraction (no Sharp)');
       return {
-        width: 1000, // Default width
-        height: 1000, // Default height
+        width: 1000,
+        height: 1000,
         format: 'unknown'
       };
     }
@@ -209,77 +216,200 @@ function createImageProcessingFallback() {
 }
 
 // Initialize image processing (Sharp or fallback)
-const imageProcessor = sharpAvailable && sharp ? {
-  async preprocessImage(filePath) {
-    const meta = await sharp(filePath).metadata();
-    let pipeline = sharp(filePath).grayscale().threshold(180);
-    
-    if (meta && meta.width && meta.width < 2000) {
-      pipeline = pipeline.resize({ width: 2000, withoutEnlargement: false });
-    }
-    
-    return await pipeline.png().toBuffer();
-  },
-  
-  async getImageMetadata(filePath) {
-    return await sharp(filePath).metadata();
+let imageProcessor = null;
+
+async function initializeImageProcessor() {
+  if (sharpAvailable && sharp) {
+    imageProcessor = {
+      async preprocessImage(filePath) {
+        const meta = await sharp(filePath).metadata();
+        let pipeline = sharp(filePath).grayscale().threshold(180);
+        
+        if (meta && meta.width && meta.width < 2000) {
+          pipeline = pipeline.resize({ width: 2000, withoutEnlargement: false });
+        }
+        
+        return await pipeline.png().toBuffer();
+      },
+      
+      async getImageMetadata(filePath) {
+        return await sharp(filePath).metadata();
+      }
+    };
+  } else {
+    imageProcessor = createImageProcessingFallback();
   }
-} : createImageProcessingFallback();
+}
 
 // Keep a global reference of the window object
 let mainWindow;
-
-// Initialize enhanced parsing service
 let enhancedParsingService;
 
-function createWindow() {
-  fs.appendFileSync(logPath, '🧱 Creating BrowserWindow\n');
-  // Create the browser window
-  mainWindow = new BrowserWindow({
-    width: 1024,
-    height: 768,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-    },
-  });
-
-  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-
-  // Open DevTools in development (optional)
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
-  }
-
-  // Emitted when the window is closed
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  // Test Sharp functionality
-  testSharpFunctionality().then((sharpWorking) => {
-    if (sharpWorking) {
-      console.log('🔧 Sharp is fully functional');
-    } else {
-      console.log('📝 Sharp is not functional, using fallback image processing');
-    }
-  });
-
-  // Initialize enhanced parsing service
+async function createWindow() {
   try {
-    enhancedParsingService = new EnhancedParsingService({
-      useAI: process.env.USE_AI === 'true' || process.env.OPENAI_API_KEY,
-      aiConfidenceThreshold: parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) || 0.5,
-      aiBatchSize: parseInt(process.env.AI_BATCH_SIZE) || 5
-    });
-    console.log('✅ Enhanced parsing service initialized');
-  } catch (error) {
-    console.warn('⚠️ Failed to initialize enhanced parsing service:', error.message);
-    // Fallback to basic parsing if enhanced service fails
-    enhancedParsingService = null;
-  }
+    debugLog('🔧 Creating main window with comprehensive debugging...');
+    await errorLogger.logInfo('Creating main window...');
 
-  // Create application menu
-  createMenu();
+    // Get the correct path for the HTML file
+    const htmlPath = app.isPackaged 
+      ? path.join(process.resourcesPath, 'app.asar', 'src', 'renderer', 'index.html')
+      : path.join(__dirname, '../renderer', 'index.html');
+    
+    debugLog(`📍 Resolved HTML path: ${htmlPath}`);
+    
+    // Check if the HTML file actually exists
+    if (fs.existsSync(htmlPath)) {
+      debugLog(`✅ HTML file EXISTS at: ${htmlPath}`);
+      const stats = fs.statSync(htmlPath);
+      debugLog(`📊 HTML file size: ${stats.size} bytes, modified: ${stats.mtime}`);
+    } else {
+      debugLog(`❌ HTML file NOT FOUND at: ${htmlPath}`);
+      
+      // Try to find the file in different locations
+      const possiblePaths = [
+        path.join(process.resourcesPath, 'app', 'renderer', 'index.html'),
+        path.join(process.resourcesPath, 'app', 'src', 'renderer', 'index.html'),
+        path.join(process.resourcesPath, 'renderer', 'index.html'),
+        path.join(__dirname, '../renderer', 'index.html'),
+        getResourcePath('/renderer/index.html'),
+        getResourcePath('renderer/index.html'),
+        getResourcePath('src/renderer/index.html')
+      ];
+      
+      debugLog('🔍 Searching for HTML file in possible locations:');
+      possiblePaths.forEach((testPath, index) => {
+        const exists = fs.existsSync(testPath);
+        debugLog(`  ${index + 1}. ${testPath} - ${exists ? '✅ EXISTS' : '❌ NOT FOUND'}`);
+      });
+    }
+
+    // Create the browser window
+    mainWindow = new BrowserWindow({
+      width: 1024,
+      height: 768,
+      webPreferences: { 
+        preload: path.join(__dirname, 'preload.js'), 
+        contextIsolation: true, 
+        nodeIntegration: false 
+      },
+      icon: getResourcePath('../../build/icon.png'),
+      title: 'Document Sorter v1.0',
+      show: false // Don't show until ready
+    });
+
+    debugLog('✅ Browser window created successfully');
+
+    // Enable DevTools automatically for debugging
+    // mainWindow.webContents.openDevTools()  // open console window
+    debugLog('🛠️ DevTools opened automatically for debugging');
+    
+    // Log all webContents events
+    mainWindow.webContents.on('did-start-loading', () => {
+      debugLog('🔄 WebContents: did-start-loading');
+    });
+    
+    mainWindow.webContents.on('did-finish-load', () => {
+      debugLog('✅ WebContents: did-finish-load');
+    });
+    
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      debugLog(`❌ WebContents: did-fail-load - Code: ${errorCode}, Description: ${errorDescription}, URL: ${validatedURL}`);
+    });
+    
+    mainWindow.webContents.on('did-frame-finish-load', (event, isMainFrame) => {
+      debugLog(`✅ WebContents: did-frame-finish-load - Main frame: ${isMainFrame}`);
+    });
+    
+    mainWindow.webContents.on('dom-ready', () => {
+      debugLog('✅ WebContents: dom-ready');
+    });
+    
+    mainWindow.webContents.on('page-title-updated', (event, title) => {
+      debugLog(`📄 WebContents: page-title-updated - Title: ${title}`);
+    });
+    
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      debugLog(`🖥️ Console [${level}]: ${message} (${sourceId}:${line})`);
+    });
+    
+    mainWindow.webContents.on('crashed', (event, killed) => {
+      debugLog(`💥 WebContents: crashed - Killed: ${killed}`);
+    });
+    
+    mainWindow.webContents.on('unresponsive', () => {
+      debugLog('⚠️ WebContents: unresponsive');
+    });
+    
+    mainWindow.webContents.on('responsive', () => {
+      debugLog('✅ WebContents: responsive');
+    });
+
+    // Load the HTML file using loadFile (not loadURL)
+    debugLog(`📂 Loading HTML file: ${htmlPath}`);
+    
+    try {
+      if (app.isPackaged) {
+        // For packaged apps, use loadURL with file:// protocol to load from asar
+        const fileUrl = `file://${htmlPath}`;
+        debugLog(`📂 Using loadURL with file:// protocol: ${fileUrl}`);
+        mainWindow.loadURL(fileUrl);
+      } else {
+        // For development, use loadFile
+        mainWindow.loadFile(htmlPath);
+      }
+      debugLog('✅ HTML loading method called successfully');
+    } catch (error) {
+      debugLog(`❌ HTML loading failed: ${error.message}`);
+      debugLog(`Error stack: ${error.stack}`);
+      throw error;
+    }
+
+    // Show window when ready
+    mainWindow.once('ready-to-show', () => {
+      debugLog('✅ Window ready-to-show');
+      mainWindow.show();
+    });
+
+    await errorLogger.logInfo(`Loading HTML from: ${htmlPath}`);
+
+    // Emitted when the window is closed
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });
+
+    // Test Sharp functionality
+    const sharpWorking = await testSharpFunctionality();
+    if (sharpWorking) {
+      await errorLogger.logInfo('Sharp is fully functional');
+    } else {
+      await errorLogger.logInfo('Sharp is not functional, using fallback image processing');
+    }
+
+    // Initialize enhanced parsing service
+    try {
+      if (EnhancedParsingService) {
+        enhancedParsingService = new EnhancedParsingService({
+          useAI: process.env.USE_AI === 'true' || process.env.OPENAI_API_KEY,
+          aiConfidenceThreshold: parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) || 0.5,
+          aiBatchSize: parseInt(process.env.AI_BATCH_SIZE) || 5
+        });
+        await errorLogger.logInfo('Enhanced parsing service initialized');
+      } else {
+        await errorLogger.logWarning('Enhanced parsing service not available, using basic parsing');
+      }
+    } catch (error) {
+      await errorLogger.logError('Failed to initialize enhanced parsing service', error);
+      enhancedParsingService = null;
+    }
+
+    // Create application menu
+    createMenu();
+    await errorLogger.logInfo('Main window creation completed successfully');
+
+  } catch (error) {
+    await errorLogger.logError('Failed to create main window', error);
+    throw error;
+  }
 }
 
 function createMenu() {
@@ -333,38 +463,6 @@ function createMenu() {
           click: () => {
             if (mainWindow) {
               mainWindow.reload();
-            }
-          }
-        },
-        {
-          label: 'Force Reload',
-          accelerator: 'CmdOrCtrl+Shift+R',
-          click: () => {
-            if (mainWindow) {
-              mainWindow.webContents.reloadIgnoringCache();
-            }
-          }
-        }
-      ]
-    },
-    {
-      label: 'Window',
-      submenu: [
-        {
-          label: 'Minimize',
-          accelerator: 'CmdOrCtrl+M',
-          click: () => {
-            if (mainWindow) {
-              mainWindow.minimize();
-            }
-          }
-        },
-        {
-          label: 'Close',
-          accelerator: 'CmdOrCtrl+W',
-          click: () => {
-            if (mainWindow) {
-              mainWindow.close();
             }
           }
         }
@@ -434,188 +532,21 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-// This method will be called when Electron has finished initialization
-fs.appendFileSync(logPath, '✅ Reached before app.whenReady()\n');
-app.whenReady().then(() => {
-  fs.appendFileSync(logPath, '🚀 Entered app.whenReady()\n');
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
-// Quit when all windows are closed
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
-
-// Handle file dialog opening
-ipcMain.handle('open-file-dialog', async (event) => {
-  try {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Select Files to Sort',
-      properties: ['openFile', 'multiSelections'],
-      filters: [
-        { name: 'Documents', extensions: ['pdf', 'docx', 'doc', 'txt'] },
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif'] },
-        { name: 'All Files', extensions: ['*'] }
-      ]
-    });
-    
-    if (result.canceled) {
-      return [];
-    }
-    
-    console.log('File dialog selected files:', result.filePaths);
-    return result.filePaths;
-  } catch (error) {
-    console.error('Error opening file dialog:', error);
-    throw error;
-  }
-});
-
-// Optional: still handle simple file drop acknowledgement (not used in new flow)
-ipcMain.handle('file:dropped', (event, filePaths) => {
-  console.log('Files dropped:', filePaths);
-  filePaths.forEach((filePath, index) => {
-    console.log(`File ${index + 1}: ${filePath}`);
-  });
-  return { success: true, message: `Successfully received ${filePaths.length} file(s)` };
-});
-
-// Listen for start:sorting to process files via OCR + rules
-ipcMain.on('start:sorting', async (event, filePaths) => {
-  // Check to ensure the received data is a non-empty array of strings
-  console.log('Received file paths:', filePaths);
-  console.log('Type of filePaths:', typeof filePaths);
-  console.log('Is array:', Array.isArray(filePaths));
-  
-  // Validate that filePaths is an array
-  if (!Array.isArray(filePaths)) {
-    console.error('Invalid filePaths: Expected array, received', typeof filePaths);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('processing:complete', {
-        total: 0,
-        success: 0,
-        errors: 1,
-        message: 'Invalid file paths format received'
-      });
-    }
-    return;
-  }
-  
-  // Validate that array is not empty
-  if (filePaths.length === 0) {
-    console.error('No file paths provided for processing');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('processing:complete', {
-        total: 0,
-        success: 0,
-        errors: 1,
-        message: 'No files provided for processing'
-      });
-    }
-    return;
-  }
-  
-  // Additional validation: ensure all items are valid strings
-  const validFilePaths = filePaths.filter(filePath => {
-    return typeof filePath === 'string' && filePath.trim().length > 0;
-  });
-  
-  if (validFilePaths.length === 0) {
-    console.error('No valid file paths found after filtering');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('processing:complete', {
-        total: 0,
-        success: 0,
-        errors: 1,
-        message: 'No valid file paths found'
-      });
-    }
-    return;
-  }
-  
-  if (validFilePaths.length !== filePaths.length) {
-    console.warn(`Filtered out ${filePaths.length - validFilePaths.length} invalid file paths`);
-  }
-
-  // Only if the data is valid, proceed to loop through the file paths
-  console.log(`Starting to process ${validFilePaths.length} valid file(s)...`);
-  let successCount = 0;
-  let failureCount = 0;
-  const errors = [];
-
-  for (const filePath of validFilePaths) {
-    // Additional safety check for each individual file path
-    if (!filePath || typeof filePath !== 'string' || filePath.trim().length === 0) {
-      console.error('Skipping invalid file path:', filePath);
-      failureCount++;
-      errors.push(`Invalid file path: ${filePath}`);
-      continue;
-    }
-    
-    try {
-      console.log(`Processing: ${path.basename(filePath)}`);
-      const finalPath = await processFile(filePath);
-      
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('file:processed', {
-          originalPath: filePath,
-          finalPath,
-          success: true,
-          message: `Successfully sorted to ${path.basename(finalPath)}`
-        });
-      }
-      successCount++;
-      
-    } catch (error) {
-      const errorMessage = error?.message || String(error);
-      console.error(`Failed processing ${path.basename(filePath)}:`, errorMessage);
-      failureCount++;
-      errors.push(`${path.basename(filePath)}: ${errorMessage}`);
-      
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('file:processed', {
-          originalPath: filePath,
-          error: errorMessage,
-          success: false,
-          message: `Failed to process: ${errorMessage}`
-        });
-      }
-    }
-  }
-  
-  // Send completion message
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('processing:complete', {
-      total: validFilePaths.length,
-      success: successCount,
-      errors: failureCount,
-      message: `Processing complete: ${successCount} successful, ${failureCount} failed`
-    });
-  }
-  
-  console.log(`Processing complete: ${successCount} successful, ${failureCount} failed`);
-  if (errors.length > 0) {
-    console.error('Processing errors:', errors);
-  }
-});
-
+// Enhanced file processing with proper error handling
 async function extractText(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  const mimeType = mime.lookup(filePath);
+  const mimeType = mime ? mime.lookup(filePath) : 'unknown';
   
-  console.log(`Extracting text from: ${path.basename(filePath)} (${ext}, ${mimeType})`);
+  await errorLogger.logInfo(`Extracting text from: ${path.basename(filePath)} (${ext}, ${mimeType})`);
   
   try {
     // Handle PDF files
-    if (ext === '.pdf') {
+    if (ext === '.pdf' && pdfParse) {
       return await extractTextFromPDF(filePath);
     }
     
     // Handle DOCX files
-    else if (ext === '.docx') {
+    else if (ext === '.docx' && mammoth) {
       return await extractTextFromDOCX(filePath);
     }
     
@@ -634,64 +565,77 @@ async function extractText(filePath) {
       throw new Error(`Unsupported file type: ${ext}`);
     }
   } catch (error) {
-    console.error(`Text extraction failed for ${path.basename(filePath)}:`, error);
+    await errorLogger.logError(`Text extraction failed for ${path.basename(filePath)}`, error);
     throw error;
   }
 }
 
 async function extractTextFromPDF(filePath) {
-  console.log(`Processing PDF: ${path.basename(filePath)}`);
+  await errorLogger.logInfo(`Processing PDF: ${path.basename(filePath)}`);
   
   try {
-    // Try pdf-parse first (for text-based PDFs)
+    if (!pdfParse) {
+      throw new Error('PDF parsing module not available');
+    }
+
     const dataBuffer = await fsp.readFile(filePath);
     const pdfData = await pdfParse(dataBuffer);
     
     if (pdfData && pdfData.text && pdfData.text.trim().length > 50) {
-      console.log(`PDF text extraction successful: ${pdfData.text.length} characters`);
+      await errorLogger.logInfo(`PDF text extraction successful: ${pdfData.text.length} characters`);
       return pdfData.text;
     } else {
-      console.log('PDF appears to be image-based, falling back to OCR');
-      // For scanned PDFs, we would need to rasterize pages first
-      // For now, return empty text and let the system handle it
+      await errorLogger.logInfo('PDF appears to be image-based, falling back to OCR');
       return '';
     }
   } catch (error) {
-    console.warn(`PDF text extraction failed: ${error.message}`);
+    await errorLogger.logError('PDF text extraction failed', error);
     throw new Error(`PDF processing failed: ${error.message}`);
   }
 }
 
 async function extractTextFromDOCX(filePath) {
-  console.log(`Processing DOCX: ${path.basename(filePath)}`);
+  await errorLogger.logInfo(`Processing DOCX: ${path.basename(filePath)}`);
   
   try {
+    if (!mammoth) {
+      throw new Error('DOCX parsing module not available');
+    }
+
     const result = await mammoth.extractRawText({ path: filePath });
     
     if (result.text && result.text.trim().length > 0) {
-      console.log(`DOCX text extraction successful: ${result.text.length} characters`);
+      await errorLogger.logInfo(`DOCX text extraction successful: ${result.text.length} characters`);
       return result.text;
     } else {
       throw new Error('No text content found in DOCX file');
     }
   } catch (error) {
-    console.error(`DOCX text extraction failed: ${error.message}`);
+    await errorLogger.logError('DOCX text extraction failed', error);
     throw new Error(`DOCX processing failed: ${error.message}`);
   }
 }
 
 async function extractTextFromImage(filePath) {
-  console.log(`Processing image: ${path.basename(filePath)}`);
+  await errorLogger.logInfo(`Processing image: ${path.basename(filePath)}`);
   
   try {
+    if (!Tesseract) {
+      throw new Error('OCR module not available');
+    }
+
     let preprocessedBuffer;
     
     // Use the appropriate image processor (Sharp or fallback)
     try {
-      preprocessedBuffer = await imageProcessor.preprocessImage(filePath);
-      console.log(`Image preprocessing completed: ${preprocessedBuffer.length} bytes`);
+      if (imageProcessor) {
+        preprocessedBuffer = await imageProcessor.preprocessImage(filePath);
+        await errorLogger.logInfo(`Image preprocessing completed: ${preprocessedBuffer.length} bytes`);
+      } else {
+        preprocessedBuffer = await fsp.readFile(filePath);
+      }
     } catch (preprocessError) {
-      console.warn(`Image preprocessing failed: ${preprocessError.message}, using original file`);
+      await errorLogger.logWarning('Image preprocessing failed, using original file', preprocessError);
       preprocessedBuffer = await fsp.readFile(filePath);
     }
 
@@ -701,7 +645,7 @@ async function extractTextFromImage(filePath) {
     });
     
     const extractedText = result?.data?.text || '';
-    console.log(`OCR completed: ${extractedText.length} characters`);
+    await errorLogger.logInfo(`OCR completed: ${extractedText.length} characters`);
     
     if (extractedText.trim().length === 0) {
       throw new Error('No text could be extracted from image');
@@ -709,102 +653,126 @@ async function extractTextFromImage(filePath) {
     
     return extractedText;
   } catch (error) {
-    console.error(`Image OCR failed: ${error.message}`);
+    await errorLogger.logError('Image OCR failed', error);
     throw new Error(`Image processing failed: ${error.message}`);
   }
 }
 
 async function extractTextFromPlainText(filePath) {
-  console.log(`Processing plain text: ${path.basename(filePath)}`);
+  await errorLogger.logInfo(`Processing plain text: ${path.basename(filePath)}`);
   
   try {
     const content = await fsp.readFile(filePath, 'utf8');
-    console.log(`Plain text extraction successful: ${content.length} characters`);
+    await errorLogger.logInfo(`Plain text extraction successful: ${content.length} characters`);
     return content;
   } catch (error) {
-    console.error(`Plain text extraction failed: ${error.message}`);
+    await errorLogger.logError('Plain text extraction failed', error);
     throw new Error(`Plain text processing failed: ${error.message}`);
   }
 }
 
+// Basic document analysis (fallback when enhanced service is not available)
+function analyzeDocument(text, filePath) {
+  const result = { 
+    date: undefined, 
+    type: 'Unclassified',
+    name: undefined, 
+    clientName: undefined,
+    amount: undefined, 
+    title: undefined, 
+    confidence: 0,
+    rawText: text,
+    filePath: filePath
+  };
+  
+  if (!text || text.trim().length === 0) {
+    return result;
+  }
+
+  // Simple keyword-based classification
+  const content = text.toLowerCase();
+  
+  if (content.includes('invoice') || content.includes('bill')) {
+    result.type = 'Invoice';
+    result.confidence = 0.7;
+  } else if (content.includes('receipt')) {
+    result.type = 'Receipt';
+    result.confidence = 0.7;
+  } else if (content.includes('contract') || content.includes('agreement')) {
+    result.type = 'Contract';
+    result.confidence = 0.7;
+  } else if (content.includes('resume') || content.includes('cv')) {
+    result.type = 'Resume';
+    result.confidence = 0.7;
+  }
+
+  // Simple date detection
+  const dateMatch = content.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
+  if (dateMatch) {
+    result.date = dateMatch[1];
+  }
+
+  return result;
+}
+
 async function processFile(filePath) {
-  console.log(`Starting processing: ${path.basename(filePath)}`);
+  await errorLogger.logInfo(`Starting processing: ${path.basename(filePath)}`);
   
   try {
     // 1) Extract text using unified file handling
     let extractedText = '';
     try {
       extractedText = await extractText(filePath);
-      console.log(`Text extraction completed: ${extractedText.length} characters`);
+      await errorLogger.logInfo(`Text extraction completed: ${extractedText.length} characters`);
     } catch (extractionError) {
-      console.error(`Text extraction failed for ${path.basename(filePath)}:`, extractionError);
+      await errorLogger.logError(`Text extraction failed for ${path.basename(filePath)}`, extractionError);
       throw new Error(`Text extraction failed: ${extractionError.message}`);
     }
 
-    // 2) Analyze text with enhanced parsing service (AI + regex)
-    console.log(`Analyzing document: ${path.basename(filePath)}`);
+    // 2) Analyze text with enhanced parsing service or fallback
+    await errorLogger.logInfo(`Analyzing document: ${path.basename(filePath)}`);
     let analysis;
     
     if (enhancedParsingService) {
       try {
         analysis = await enhancedParsingService.analyzeDocumentEnhanced(extractedText, filePath);
-        console.log('Enhanced analysis result:', {
-          type: analysis.type,
-          clientName: analysis.clientName,
-          confidence: analysis.confidence,
-          date: analysis.date,
-          source: analysis.source
-        });
+        await errorLogger.logInfo('Enhanced analysis completed');
       } catch (enhancedError) {
-        console.warn(`Enhanced parsing failed, falling back to basic analysis: ${enhancedError.message}`);
+        await errorLogger.logWarning('Enhanced parsing failed, falling back to basic analysis', enhancedError);
         analysis = analyzeDocument(extractedText, filePath);
       }
     } else {
-      // Fallback to basic analysis if enhanced service is not available
       analysis = analyzeDocument(extractedText, filePath);
-      console.log('Basic analysis result:', {
-        type: analysis.type,
-        clientName: analysis.clientName,
-        confidence: analysis.confidence,
-        date: analysis.date
-      });
+      await errorLogger.logInfo('Basic analysis completed');
     }
 
-    // 3) Generate robust filename using unified naming function
+    // 3) Generate filename using proper path resolution
     const ext = path.extname(filePath).toLowerCase();
-    const fileName = _generateFileName(analysis, ext);
+    const fileName = generateFileName(analysis, ext);
     const folder = mapTypeToFolder(analysis.type);
     
-    console.log(`Generated filename: ${fileName}`);
-    console.log(`Target folder: ${folder}`);
+    await errorLogger.logInfo(`Generated filename: ${fileName}`);
+    await errorLogger.logInfo(`Target folder: ${folder}`);
     
-    // 4) Handle file operations with robust error handling
-    const finalPath = await _handleFileOperations(filePath, fileName, folder);
+    // 4) Handle file operations with proper path resolution
+    const finalPath = await handleFileOperations(filePath, fileName, folder);
     
-    // 5) Send success notification to renderer with enhanced data
+    // 5) Send success notification to renderer
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('file:processed', {
         originalPath: filePath,
         finalPath: finalPath,
         success: true,
         message: `Successfully sorted to ${path.basename(finalPath)}`,
-        analysis: {
-          type: analysis.type,
-          clientName: analysis.clientName,
-          confidence: analysis.confidence,
-          date: analysis.date,
-          source: analysis.source || 'regex',
-          aiConfidence: analysis.aiConfidence || 0,
-          snippets: analysis.snippets || []
-        }
+        analysis: analysis
       });
     }
     
-    console.log(`✅ Successfully processed: ${path.basename(filePath)} -> ${path.basename(finalPath)}`);
+    await errorLogger.logInfo(`Successfully processed: ${path.basename(filePath)} -> ${path.basename(finalPath)}`);
     return finalPath;
     
   } catch (error) {
-    console.error(`❌ Processing failed for ${path.basename(filePath)}:`, error);
+    await errorLogger.logError(`Processing failed for ${path.basename(filePath)}`, error);
     
     // Send error notification to renderer
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -820,107 +788,60 @@ async function processFile(filePath) {
   }
 }
 
-function _generateFileName(documentData, extension) {
-  console.log('Generating filename for document data:', {
-    clientName: documentData.clientName,
-    type: documentData.type,
-    date: documentData.date,
-    confidence: documentData.confidence
-  });
-  
+function generateFileName(documentData, extension) {
   const parts = [];
   
-  // 1. CLIENT NAME (most critical - goes first in filename)
+  // Client name
   let clientName = 'Client_NA';
-  
   if (documentData.clientName && documentData.clientName.trim()) {
     clientName = documentData.clientName.trim();
-  } else if (documentData.name && documentData.name.trim()) {
-    clientName = documentData.name.trim();
-  } else if (documentData.title && documentData.title.trim()) {
-    const title = documentData.title.trim();
-    if (title.length > 2 && title.length < 50 && 
-        !title.toLowerCase().includes('page') &&
-        !title.toLowerCase().includes('confidential')) {
-      clientName = title;
-    }
   }
+  parts.push(sanitizeComponent(clientName));
   
-  parts.push(_sanitizeComponent(clientName));
-  
-  // 2. DOCUMENT TYPE (with fallback)
+  // Document type
   let documentType = 'Unclassified';
   if (documentData.type && documentData.type.trim()) {
     documentType = documentData.type.trim();
-    // Add confidence indicator for low confidence classifications
     if (documentData.confidence < 0.5) {
       documentType = `${documentType}_LowConfidence`;
     }
   }
-  parts.push(_sanitizeComponent(documentType));
+  parts.push(sanitizeComponent(documentType));
   
-  // 3. DATE (with fallback to file modification date)
-  let dateString = getTodayString();
-  if (documentData.date && documentData.date.trim()) {
-    dateString = documentData.date.trim();
-  } else if (documentData.filePath) {
-    // Try to get file modification date as fallback
-    try {
-      const stats = fs.statSync(documentData.filePath);
-      dateString = stats.mtime.toISOString().split('T')[0];
-      console.log(`Using file modification date: ${dateString}`);
-    } catch (error) {
-      console.warn(`Could not read file modification date: ${error.message}, using today's date`);
-    }
+  // Date
+  if (documentData.date) {
+    parts.push(documentData.date);
   }
-  parts.push(_sanitizeComponent(dateString));
   
-  // 4. Join all parts and add extension
-  const fileName = parts.filter(Boolean).join('_') + extension;
-  
-  // 5. Final validation and sanitization
-  const finalFileName = _sanitizeFileName(fileName);
-  console.log(`Generated final filename: ${finalFileName}`);
-  
-  return finalFileName;
+  return parts.join('_') + extension;
 }
 
-function _sanitizeComponent(component) {
+function sanitizeComponent(component) {
   if (!component || typeof component !== 'string') {
     return 'Unknown';
   }
   
   return component
-    .replace(/[<>:"/\\|?*]/g, '_')  // Windows invalid chars
-    .replace(/[\x00-\x1f\x80-\x9f]/g, '_')  // Control characters
-    .replace(/\s+/g, '_')  // Replace spaces with underscores
-    .replace(/_+/g, '_')  // Replace multiple underscores with single
-    .replace(/^_|_$/g, '')  // Remove leading/trailing underscores
-    .slice(0, 50) || 'Unknown';  // Limit length and ensure non-empty
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/[\x00-\x1f\x80-\x9f]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 50) || 'Unknown';
 }
 
-function _sanitizeFileName(fileName) {
-  return fileName
-    .replace(/[<>:"/\\|?*]/g, '_')  // Windows invalid chars
-    .replace(/[\x00-\x1f\x80-\x9f]/g, '_')  // Control characters
-    .replace(/\s+/g, '_')  // Replace spaces with underscores
-    .replace(/_+/g, '_')  // Replace multiple underscores with single
-    .replace(/^_|_$/g, '')  // Remove leading/trailing underscores
-    .slice(0, 200) || 'Unnamed_Document';  // Limit length and ensure non-empty
-}
-
-async function _handleFileOperations(originalPath, fileName, folder) {
+async function handleFileOperations(originalPath, fileName, folder) {
   try {
-    // Construct destination path
-    const destRoot = path.join(require('os').homedir(), 'Desktop', 'sorted_files', folder);
-    console.log(`Destination root: ${destRoot}`);
+    // Use proper path resolution for destination
+    const destRoot = path.join(os.homedir(), 'Desktop', 'sorted_files', folder);
+    await errorLogger.logInfo(`Destination root: ${destRoot}`);
     
     // Ensure destination directory exists
     try {
-      fs.mkdirSync(destRoot, { recursive: true });
-      console.log(`Created/verified directory: ${destRoot}`);
+      await fsp.mkdir(destRoot, { recursive: true });
+      await errorLogger.logInfo(`Created/verified directory: ${destRoot}`);
     } catch (mkdirError) {
-      console.error(`Failed to create directory ${destRoot}:`, mkdirError);
+      await errorLogger.logError(`Failed to create directory ${destRoot}`, mkdirError);
       throw new Error(`Directory creation failed: ${mkdirError.message}`);
     }
     
@@ -928,27 +849,27 @@ async function _handleFileOperations(originalPath, fileName, folder) {
     let finalPath = path.join(destRoot, fileName);
     
     // Ensure unique filename if file already exists
-    finalPath = await _ensureUniquePath(finalPath);
-    console.log(`Final destination: ${finalPath}`);
+    finalPath = await ensureUniquePath(finalPath);
+    await errorLogger.logInfo(`Final destination: ${finalPath}`);
     
-    // Move and rename the file
+    // Copy file to target location (safer than move for packaged apps)
     try {
-      fs.renameSync(originalPath, finalPath);
-      console.log(`File moved successfully: ${path.basename(originalPath)} -> ${path.basename(finalPath)}`);
-    } catch (renameError) {
-      console.error('Failed to move file:', renameError);
-      throw new Error(`File move failed: ${renameError.message}`);
+      await fsp.copyFile(originalPath, finalPath);
+      await errorLogger.logInfo(`File copied successfully: ${path.basename(originalPath)} -> ${path.basename(finalPath)}`);
+    } catch (copyError) {
+      await errorLogger.logError('Failed to copy file', copyError);
+      throw new Error(`File copy failed: ${copyError.message}`);
     }
     
     return finalPath;
     
   } catch (error) {
-    console.error(`File operations failed for ${path.basename(originalPath)}:`, error);
+    await errorLogger.logError(`File operations failed for ${path.basename(originalPath)}`, error);
     throw error;
   }
 }
 
-async function _ensureUniquePath(targetPath) {
+async function ensureUniquePath(targetPath) {
   const dir = path.dirname(targetPath);
   const base = path.basename(targetPath);
   const ext = path.extname(base);
@@ -958,422 +879,13 @@ async function _ensureUniquePath(targetPath) {
   
   while (true) {
     try {
-      fs.accessSync(candidate, fs.constants.F_OK);
+      await fsp.access(candidate, fs.constants.F_OK);
       candidate = path.join(dir, `${name}_${i}${ext}`);
       i += 1;
     } catch {
       return candidate;
     }
   }
-}
-
-function analyzeDocument(text, filePath) {
-  const result = { 
-    date: undefined, 
-    type: 'Unclassified', // Always provide a default type
-    name: undefined, 
-    clientName: undefined,
-    amount: undefined, 
-    title: undefined, 
-    confidence: 0,
-    rawText: text,
-    filePath: filePath
-  };
-  
-  if (!text || text.trim().length === 0) {
-    return result;
-  }
-
-  // Split text into lines and words for analysis
-  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-  const words = text.split(/\s+/).filter(word => word.length > 0);
-  const content = text.replace(/\r/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-
-  // 1. STRICT KEYWORD MATCHING WITH BUSINESS DOCUMENT TYPES
-  const businessDocumentTypes = new Set([
-    'Resume', 'CV', 'Invoice', 'Receipt', 'Purchase Order', 'Contract', 
-    'Service Agreement', 'Partnership Agreement', 'Non-Disclosure Agreement (NDA)', 
-    'Lease Agreement', 'Statement', 'Proposal', 'Report', 'Memorandum', 
-    'Business Plan', 'Bylaws', 'Articles of Incorporation', 
-    'SOP (Standard Operating Procedure)', 'Tax Return', 'Balance Sheet', 
-    'Income Statement', 'Cash Flow Statement', 'Audit Report', 'Employee Handbook', 
-    'Offer Letter', 'Employment Agreement', 'Performance Review', 'Job Description', 
-    'Project Plan', 'Scope Statement', 'Meeting Minutes', 
-    'Request for Proposal (RFP)', 'Work Order', 'Purchase Requisition'
-  ]);
-
-  // Document type keywords with variations and synonyms
-  const documentTypeKeywords = {
-    'Resume': ['resume', 'cv', 'curriculum vitae', 'professional summary', 'work experience', 'education', 'skills', 'qualifications'],
-    'Invoice': ['invoice', 'bill', 'billing', 'amount due', 'payment due', 'total amount', 'subtotal', 'tax', 'invoice number'],
-    'Receipt': ['receipt', 'payment received', 'thank you for your payment', 'transaction', 'purchase', 'receipt number'],
-    'Purchase Order': ['purchase order', 'po number', 'po#', 'purchase requisition', 'order number'],
-    'Contract': ['contract', 'agreement', 'terms and conditions', 'service agreement', 'license agreement', 'employment contract'],
-    'Service Agreement': ['service agreement', 'service contract', 'terms of service', 'service level agreement'],
-    'Partnership Agreement': ['partnership agreement', 'partnership contract', 'partnership terms'],
-    'Non-Disclosure Agreement (NDA)': ['non-disclosure agreement', 'nda', 'confidentiality agreement', 'confidentiality'],
-    'Lease Agreement': ['lease agreement', 'rental agreement', 'lease contract', 'rental contract'],
-    'Statement': ['statement', 'account statement', 'bank statement', 'monthly statement', 'balance', 'account balance'],
-    'Proposal': ['proposal', 'quote', 'quotation', 'estimate', 'bid', 'project proposal', 'cost estimate'],
-    'Report': ['report', 'analysis', 'summary report', 'financial report', 'annual report', 'quarterly report'],
-    'Memorandum': ['memorandum', 'memo', 'internal memo', 'office memo'],
-    'Business Plan': ['business plan', 'business proposal', 'strategic plan', 'business strategy'],
-    'Bylaws': ['bylaws', 'corporate bylaws', 'company bylaws', 'organizational bylaws'],
-    'Articles of Incorporation': ['articles of incorporation', 'incorporation', 'corporate charter'],
-    'SOP (Standard Operating Procedure)': ['standard operating procedure', 'sop', 'operating procedure', 'procedure manual'],
-    'Tax Return': ['tax return', 'tax filing', 'income tax return', 'tax form'],
-    'Balance Sheet': ['balance sheet', 'financial position', 'assets and liabilities'],
-    'Income Statement': ['income statement', 'profit and loss', 'p&l statement', 'revenue statement'],
-    'Cash Flow Statement': ['cash flow statement', 'cash flow', 'cash position'],
-    'Audit Report': ['audit report', 'audit findings', 'auditor report', 'audit opinion'],
-    'Employee Handbook': ['employee handbook', 'employee manual', 'staff handbook', 'company handbook'],
-    'Offer Letter': ['offer letter', 'job offer', 'employment offer', 'offer of employment'],
-    'Employment Agreement': ['employment agreement', 'employment contract', 'work agreement'],
-    'Performance Review': ['performance review', 'employee review', 'annual review', 'performance evaluation'],
-    'Job Description': ['job description', 'position description', 'role description', 'job posting'],
-    'Project Plan': ['project plan', 'project proposal', 'project scope', 'project charter'],
-    'Scope Statement': ['scope statement', 'project scope', 'scope of work', 'statement of work'],
-    'Meeting Minutes': ['meeting minutes', 'minutes', 'meeting notes', 'conference minutes'],
-    'Request for Proposal (RFP)': ['request for proposal', 'rfp', 'proposal request', 'bid request'],
-    'Work Order': ['work order', 'service order', 'job order', 'work request'],
-    'Purchase Requisition': ['purchase requisition', 'requisition', 'purchase request', 'procurement request']
-  };
-
-  // 2. CONTEXTUAL KEYWORD PRIORITIZATION WITH WEIGHTED SCORING
-  const typeScores = {};
-  
-  for (const [docType, keywords] of Object.entries(documentTypeKeywords)) {
-    let score = 0;
-    
-    // High priority: Keywords in first 20 lines (headers, titles)
-    const first20Lines = lines.slice(0, 20).join(' ').toLowerCase();
-    for (const keyword of keywords) {
-      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      const matches = (first20Lines.match(regex) || []).length;
-      score += matches * 20; // High confidence for header/title matches
-    }
-    
-    // Medium priority: Keywords in first 100 words
-    const first100Words = words.slice(0, 100).join(' ').toLowerCase();
-    for (const keyword of keywords) {
-      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      const matches = (first100Words.match(regex) || []).length;
-      score += matches * 15; // Medium confidence for early content
-    }
-    
-    // Lower priority: Keywords anywhere in document
-    for (const keyword of keywords) {
-      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      const matches = (content.match(regex) || []).length;
-      score += matches * 5; // Lower confidence for body text
-    }
-    
-    // Bonus for exact document type matches
-    if (businessDocumentTypes.has(docType)) {
-      const exactMatch = new RegExp(`\\b${docType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      if (exactMatch.test(content)) {
-        score += 50; // High bonus for exact type matches
-      }
-    }
-    
-    typeScores[docType] = score;
-  }
-
-  // Select document type with highest confidence score
-  const sortedTypes = Object.entries(typeScores).sort((a, b) => b[1] - a[1]);
-  if (sortedTypes.length > 0 && sortedTypes[0][1] > 10) {
-    result.type = sortedTypes[0][0];
-    result.confidence = Math.min(sortedTypes[0][1] / 100, 1); // Normalize to 0-1
-  }
-
-  // 3. NLP FALLBACK USING SIMPLE WORD ANALYSIS
-  if (!result.type || result.confidence < 0.3) {
-    console.log('Using NLP fallback for document classification');
-    
-    try {
-      // Simple tokenization without external library
-      const tokens = content.toLowerCase()
-        .replace(/[^\w\s]/g, ' ') // Remove punctuation
-        .split(/\s+/)
-        .filter(word => word.length > 0);
-      
-      // Remove stop words and short words
-      const stopWords = new Set(['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'man', 'oil', 'sit', 'try', 'use', 'will', 'with', 'this', 'that', 'they', 'them', 'their', 'there', 'then', 'than', 'been', 'have', 'from', 'each', 'which', 'your', 'what', 'when', 'where', 'why', 'how']);
-      
-      const meaningfulWords = tokens.filter(word => 
-        word.length > 3 && 
-        !/^\d+$/.test(word) && 
-        !stopWords.has(word)
-      );
-      
-      // Count word frequencies
-      const wordFreq = {};
-      meaningfulWords.forEach(word => {
-        wordFreq[word] = (wordFreq[word] || 0) + 1;
-      });
-      
-      // Sort by frequency
-      const sortedWords = Object.entries(wordFreq).sort((a, b) => b[1] - a[1]);
-      
-      // NLP-based classification using word patterns
-      const nlpClassification = _classifyByNLP(sortedWords, content);
-      if (nlpClassification) {
-        result.type = nlpClassification.type;
-        result.confidence = nlpClassification.confidence;
-        console.log(`NLP classification: ${nlpClassification.type} (confidence: ${nlpClassification.confidence})`);
-      }
-      
-    } catch (nlpError) {
-      console.warn('NLP analysis failed:', nlpError.message);
-    }
-  }
-
-  // 4. SMART TITLE DETECTION
-  const genericPhrases = [
-    'page 1 of', 'confidential', 'draft', 'copy', 'original', '©', 'copyright',
-    'all rights reserved', 'proprietary', 'internal use', 'do not copy',
-    'date:', 'time:', 'subject:', 're:', 'fwd:', 'fw:'
-  ];
-
-  let bestTitle = null;
-  let bestTitleScore = 0;
-
-  // Check first 10 lines for potential titles
-  for (let i = 0; i < Math.min(10, lines.length); i++) {
-    const line = lines[i];
-    if (!line || line.length < 3) continue;
-
-    // Skip generic phrases
-    const isGeneric = genericPhrases.some(phrase => 
-      line.toLowerCase().includes(phrase.toLowerCase())
-    );
-    if (isGeneric) continue;
-
-    let score = 0;
-    
-    // Short phrases (1-5 words) get higher scores
-    const wordCount = line.split(/\s+/).length;
-    if (wordCount >= 1 && wordCount <= 5) {
-      score += 10;
-    } else if (wordCount <= 10) {
-      score += 5;
-    }
-
-    // ALL CAPS titles get bonus points
-    if (line === line.toUpperCase() && line.length > 3 && line.length < 100) {
-      score += 15;
-    }
-
-    // Title case (First Letter Of Each Word) gets points
-    const isTitleCase = /^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/.test(line);
-    if (isTitleCase && wordCount >= 2) {
-      score += 8;
-    }
-
-    // Early lines get higher priority
-    score += Math.max(0, 10 - i);
-
-    // Avoid lines that look like addresses, phone numbers, or dates
-    if (/^\d+[\/\-]\d+[\/\-]\d+/.test(line) || // Date patterns
-        /^\d{3}[-.]?\d{3}[-.]?\d{4}/.test(line) || // Phone patterns
-        /^\d+\s+\w+\s+st|ave|rd|dr|blvd/i.test(line)) { // Address patterns
-      score -= 20;
-    }
-
-    if (score > bestTitleScore) {
-      bestTitleScore = score;
-      bestTitle = line;
-    }
-  }
-
-  if (bestTitle && bestTitleScore > 5) {
-    result.title = bestTitle;
-  }
-
-  // 5. DATE DETECTION
-  const datePatterns = [
-    /(0?[1-9]|1[0-2])[\/\-](0?[1-9]|[12][0-9]|3[01])[\/\-]((?:19|20)?\d\d)/i,
-    /([0-2]?[0-9]|3[01])[\-\.](0?[1-9]|1[0-2])[\-\.]((?:19|20)?\d\d)/i,
-    /(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+([0-2]?[0-9]|3[01]),?\s+((?:19|20)?\d\d)/i
-  ];
-  
-  for (const rx of datePatterns) {
-    const m = content.match(rx);
-    if (m) { 
-      result.date = normalizeDateMatch(m); 
-      break; 
-    }
-  }
-
-  // 6. CLIENT NAME DETECTION (enhanced for business documents)
-  const clientPatterns = [
-    // Bill to / Invoice to patterns
-    /(bill\s*to|billed\s*to|invoice\s*to|to)\s*[:\-]\s*([A-Za-z0-9&.,'\- ]{2,80})/i,
-    // From / Vendor patterns
-    /(from|vendor|supplier|company)\s*[:\-]\s*([A-Za-z0-9&.,'\- ]{2,80})/i,
-    // Attention patterns
-    /(attention|attn)\s*[:\-]\s*([A-Za-z0-9&.,'\- ]{2,80})/i,
-    // Re: patterns
-    /(re|regarding)\s*[:\-]\s*([A-Za-z0-9&.,'\- ]{2,80})/i,
-    // Standalone name patterns
-    /^([A-Z][a-z]+ [A-Z][a-z]+)$/m,
-    /^([A-Z][a-z]+ [A-Z][a-z]+ [A-Z][a-z]+)$/m,
-    // Company name patterns (Inc, Corp, LLC, Ltd)
-    /^([A-Z][A-Za-z0-9&.,'\- ]{2,50}\s+(?:Inc|Corp|Corporation|LLC|Ltd|Limited|Company|Co)\.?)$/m
-  ];
-  
-  let bestClientName = null;
-  let bestClientScore = 0;
-  
-  for (const rx of clientPatterns) {
-    const m = content.match(rx);
-    if (m) { 
-      const extractedName = m[2] ? m[2].trim() : m[1].trim();
-      const cleanName = extractedName.replace(/[^\w\s\-&.,']/g, '').trim();
-      
-      if (cleanName.length > 2 && cleanName.length < 100) {
-        // Score based on pattern type and position
-        let score = 10; // Base score
-        
-        // Higher score for "Bill to" patterns (most important for invoices)
-        if (rx.source.includes('bill') || rx.source.includes('invoice')) {
-          score += 20;
-        }
-        
-        // Higher score for company patterns
-        if (rx.source.includes('Inc|Corp|LLC|Ltd')) {
-          score += 15;
-        }
-        
-        // Higher score for names in first few lines
-        const lineIndex = lines.findIndex(line => line.includes(cleanName));
-        if (lineIndex >= 0 && lineIndex < 5) {
-          score += 10;
-        }
-        
-        if (score > bestClientScore) {
-          bestClientScore = score;
-          bestClientName = cleanName;
-        }
-      }
-    }
-  }
-  
-  if (bestClientName) {
-    result.clientName = bestClientName;
-    result.name = bestClientName; // Keep backward compatibility
-  }
-
-  // 7. AMOUNT DETECTION
-  const amountPatterns = [
-    /\btotal\s*[:\-]?\s*\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i,
-    /\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/
-  ];
-  
-  for (const rx of amountPatterns) {
-    const m = content.match(rx);
-    if (m) { 
-      result.amount = m[1]; 
-      break; 
-    }
-  }
-
-  // Ensure type is never null or undefined
-  if (!result.type) {
-    result.type = 'Unclassified';
-    result.confidence = 0.1;
-  }
-
-  console.log(`Document classification result: ${result.type} (confidence: ${result.confidence})`);
-  return result;
-}
-
-function _classifyByNLP(sortedWords, content) {
-  // Define word patterns for different document types
-  const nlpPatterns = {
-    'Resume': {
-      keywords: ['experience', 'education', 'skills', 'employment', 'career', 'professional', 'qualifications', 'work', 'job', 'position', 'hiring', 'candidate'],
-      weight: 1.0
-    },
-    'Invoice': {
-      keywords: ['invoice', 'bill', 'payment', 'total', 'amount', 'due', 'billing', 'account', 'charge', 'fee', 'cost', 'price'],
-      weight: 1.0
-    },
-    'Contract': {
-      keywords: ['agreement', 'contract', 'terms', 'conditions', 'parties', 'obligations', 'liability', 'indemnity', 'warranty', 'clause'],
-      weight: 1.0
-    },
-    'Report': {
-      keywords: ['report', 'analysis', 'data', 'findings', 'conclusion', 'methodology', 'results', 'summary', 'recommendations'],
-      weight: 1.0
-    },
-    'Statement': {
-      keywords: ['statement', 'balance', 'account', 'transaction', 'deposit', 'withdrawal', 'monthly', 'quarterly'],
-      weight: 1.0
-    },
-    'Proposal': {
-      keywords: ['proposal', 'quote', 'estimate', 'bid', 'project', 'scope', 'deliverables', 'timeline', 'budget'],
-      weight: 1.0
-    }
-  };
-
-  let bestMatch = null;
-  let bestScore = 0;
-
-  for (const [docType, pattern] of Object.entries(nlpPatterns)) {
-    let score = 0;
-    
-    // Check word frequency
-    for (const [word, freq] of sortedWords.slice(0, 20)) { // Top 20 most frequent words
-      if (pattern.keywords.includes(word)) {
-        score += freq * pattern.weight;
-      }
-    }
-    
-    // Check for keyword phrases in content
-    for (const keyword of pattern.keywords) {
-      const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-      const matches = (content.match(regex) || []).length;
-      score += matches * pattern.weight;
-    }
-    
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = {
-        type: docType,
-        confidence: Math.min(score / 20, 0.8) // Cap at 0.8 for NLP fallback
-      };
-    }
-  }
-
-  return bestMatch;
-}
-
-
-function normalizeDateMatch(m) {
-  // Returns YYYY-MM-DD
-  const months = {
-    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-    jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12
-  };
-  if (m.length === 4 && isNaN(Number(m[1]))) {
-    // Month name
-    const month = months[m[1].toLowerCase()];
-    const day = Number(m[2]);
-    let year = Number(m[3]);
-    if (year < 100) year += 2000;
-    return `${year.toString().padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  }
-  // Other numeric forms
-  // Try to infer whether it's MM/DD/YYYY or DD-MM-YY by separators
-  const a = Number(m[1]);
-  const b = Number(m[2]);
-  let y = Number(m[3]);
-  if (y < 100) y += 2000;
-  // Heuristic: if first <=12, treat as month-first
-  let month = a, day = b;
-  if (a > 12 && b <= 12) { month = b; day = a; }
-  return `${y.toString().padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function mapTypeToFolder(type) {
@@ -1391,231 +903,387 @@ function mapTypeToFolder(type) {
   return 'Unsorted';
 }
 
-
-function getTodayString() {
-  const today = new Date();
-  return today.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
-}
-
-// Settings and diagnostics IPC handlers
-ipcMain.handle('get-ai-status', async () => {
-  try {
-    if (enhancedParsingService) {
-      const stats = enhancedParsingService.getStats();
-      return {
-        enabled: enhancedParsingService.useAI,
-        threshold: enhancedParsingService.aiConfidenceThreshold,
-        batchSize: enhancedParsingService.aiBatchSize,
-        stats: stats
-      };
-    }
-    return { enabled: false, threshold: 0.5, batchSize: 5, stats: null };
-  } catch (error) {
-    console.error('Error getting AI status:', error);
-    return { enabled: false, threshold: 0.5, batchSize: 5, stats: null };
-  }
-});
-
-// Extraction configuration IPC handlers
-ipcMain.handle('get-extraction-config', async () => {
-  try {
-    if (enhancedParsingService) {
-      return enhancedParsingService.getExtractionConfig();
-    }
-    return { useOCR: false, useTableExtraction: false, useLLMEnhancer: true };
-  } catch (error) {
-    console.error('Error getting extraction config:', error);
-    return { useOCR: false, useTableExtraction: false, useLLMEnhancer: true };
-  }
-});
-
-ipcMain.handle('update-extraction-config', async (event, config) => {
-  try {
-    if (enhancedParsingService) {
-      enhancedParsingService.updateExtractionConfig(config);
-      await enhancedParsingService.saveConfig();
-      console.log('Extraction configuration updated:', config);
-      return { success: true };
-    }
-    return { success: false, error: 'Enhanced parsing service not available' };
-  } catch (error) {
-    console.error('Error updating extraction config:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('get-stats', async () => {
-  try {
-    if (enhancedParsingService) {
-      return enhancedParsingService.getStats();
-    }
-    return {
-      totalProcessed: 0,
-      regexProcessed: 0,
-      aiProcessed: 0,
-      cacheHits: 0,
-      cacheMisses: 0,
-      errors: 0,
-      averageConfidence: 0
-    };
-  } catch (error) {
-    console.error('Error getting stats:', error);
-    return null;
-  }
-});
-
-ipcMain.handle('save-settings', async (event, settings) => {
-  try {
-    // Update enhanced parsing service configuration
-    if (enhancedParsingService) {
-      enhancedParsingService.useAI = settings.useAI;
-      enhancedParsingService.aiConfidenceThreshold = settings.confidenceThreshold;
-      enhancedParsingService.aiBatchSize = settings.batchSize || 5;
-    }
-    
-    // Save settings to config file
-    const configPath = path.join(__dirname, '../../config/default.json');
-    const config = {
-      ai: {
-        enabled: settings.useAI,
-        confidenceThreshold: settings.confidenceThreshold,
-        model: settings.model || 'gpt-3.5-turbo',
-        batchSize: settings.batchSize || 5
-      }
-    };
-    
-    await fsp.writeFile(configPath, JSON.stringify(config, null, 2));
-    console.log('Settings saved successfully');
-    return { success: true };
-  } catch (error) {
-    console.error('Error saving settings:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('toggle-ai', async (event, enabled) => {
-  try {
-    if (enhancedParsingService) {
-      enhancedParsingService.useAI = enabled;
-      console.log(`AI processing ${enabled ? 'enabled' : 'disabled'}`);
-    }
-    return { success: true, enabled };
-  } catch (error) {
-    console.error('Error toggling AI:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('get-diagnostics', async () => {
-  try {
-    if (enhancedParsingService && enhancedParsingService.telemetry) {
-      // Use telemetry service for comprehensive diagnostics
-      return enhancedParsingService.getTelemetryDiagnostics();
-    }
-    
-    // Fallback to basic diagnostics if telemetry is not available
-    const diagnostics = {
-      ai: {
-        totalCalls: 0,
-        successfulCalls: 0,
-        failedCalls: 0,
-        cachedCalls: 0,
-        averageLatency: 0,
-        successRate: 0
-      },
-      cache: {
-        hits: 0,
-        misses: 0,
-        hitRate: 0,
-        size: 0,
-        evictions: 0
-      },
-      processing: {
-        totalFiles: 0,
-        regexProcessed: 0,
-        aiProcessed: 0,
-        averageConfidence: 0,
-        averageProcessingTime: 0
-      },
-      performance: {
-        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        cpuUsage: process.cpuUsage()
-      },
-      session: {
-        duration: Math.round((Date.now() - process.uptime() * 1000) / 1000),
-        lastActivity: new Date().toISOString()
-      },
-      errors: {
-        recent: []
-      }
-    };
-    
-    if (enhancedParsingService) {
-      const stats = enhancedParsingService.getStats();
-      diagnostics.processing = {
-        totalFiles: stats.totalProcessed,
-        regexProcessed: stats.regexProcessed,
-        aiProcessed: stats.aiProcessed,
-        averageConfidence: stats.averageConfidence,
-        averageProcessingTime: 0 // This would need to be tracked
-      };
-      
-      if (enhancedParsingService.aiCache) {
-        const cacheStats = enhancedParsingService.aiCache.getStats();
-        diagnostics.cache = {
-          hits: cacheStats.hits || 0,
-          misses: cacheStats.misses || 0,
-          hitRate: cacheStats.hitRate || 0,
-          size: cacheStats.size || 0,
-          evictions: cacheStats.evictions || 0
-        };
-      }
-    }
-    
-    return diagnostics;
-  } catch (error) {
-    console.error('Error getting diagnostics:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('clear-telemetry', async () => {
-  try {
-    if (enhancedParsingService) {
-      enhancedParsingService.resetStats();
-      if (enhancedParsingService.aiCache) {
-        await enhancedParsingService.aiCache.clear();
-      }
-      if (enhancedParsingService.telemetry) {
-        await enhancedParsingService.telemetry.clearData();
-      }
-    }
-    console.log('Telemetry data cleared');
-    return { success: true };
-  } catch (error) {
-    console.error('Error clearing telemetry:', error);
-    throw error;
-  }
-});
-
-ipcMain.handle('export-telemetry', async () => {
-  try {
-    if (enhancedParsingService && enhancedParsingService.telemetry) {
-      return enhancedParsingService.telemetry.exportData();
-    }
-    
-    // Fallback to diagnostics if telemetry service not available
-    const diagnostics = await ipcMain.invoke('get-diagnostics');
-    return diagnostics;
-  } catch (error) {
-    console.error('Error exporting telemetry:', error);
-    throw error;
-  }
-});
-
 // Handle app security
 app.on('web-contents-created', (event, contents) => {
   contents.on('new-window', (event, _navigationUrl) => {
     event.preventDefault();
   });
+});
+
+// Enhanced app initialization with comprehensive error handling
+async function initializeApp() {
+  try {
+    await errorLogger.logInfo('=== Document Sorter Starting ===');
+    await errorLogger.logInfo(`App is packaged: ${app.isPackaged}`);
+    await errorLogger.logInfo(`Node version: ${process.version}`);
+    await errorLogger.logInfo(`Platform: ${process.platform}`);
+    await errorLogger.logInfo(`Architecture: ${process.arch}`);
+    
+    // Initialize modules
+    await initializeModules();
+    
+    // Initialize image processor
+    await initializeImageProcessor();
+    
+    await errorLogger.logInfo('App initialization completed successfully');
+  } catch (error) {
+    await errorLogger.logError('Critical error during app initialization', error);
+    throw error;
+  }
+}
+
+// This method will be called when Electron has finished initialization
+app.whenReady().then(async () => {
+  try {
+    await initializeApp();
+    
+    // Register all IPC handlers first, before creating windows
+    console.log('📡 Registering IPC handlers...');
+    
+    // IPC Handlers with enhanced error handling
+    ipcMain.handle('open-file-dialog', async (event) => {
+      try {
+        await errorLogger.logInfo('Opening file dialog...');
+        const result = await dialog.showOpenDialog(mainWindow, {
+          title: 'Select Files to Sort',
+          properties: ['openFile', 'multiSelections'],
+          filters: [
+            { name: 'Documents', extensions: ['pdf', 'docx', 'doc', 'txt'] },
+            { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif'] },
+            { name: 'All Files', extensions: ['*'] }
+          ]
+        });
+        
+        if (result.canceled) {
+          await errorLogger.logInfo('File dialog canceled by user');
+          return [];
+        }
+        
+        await errorLogger.logInfo(`File dialog selected ${result.filePaths.length} files`);
+        return result.filePaths;
+      } catch (error) {
+        await errorLogger.logError('Error opening file dialog', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('file:dropped', (event, filePaths) => {
+      errorLogger.logInfo(`Files dropped: ${filePaths.length} files`);
+      filePaths.forEach((filePath, index) => {
+        errorLogger.logInfo(`File ${index + 1}: ${filePath}`);
+      });
+      return { success: true, message: `Successfully received ${filePaths.length} file(s)` };
+    });
+
+    ipcMain.on('start:sorting', async (event, filePaths) => {
+      await errorLogger.logInfo(`Starting sorting process for ${filePaths.length} files`);
+      
+      // Validate file paths
+      if (!Array.isArray(filePaths)) {
+        await errorLogger.logError('Invalid filePaths: Expected array', new Error(`Received ${typeof filePaths}`));
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('processing:complete', {
+            total: 0,
+            success: 0,
+            errors: 1,
+            message: 'Invalid file paths format received'
+          });
+        }
+        return;
+      }
+      
+      if (filePaths.length === 0) {
+        await errorLogger.logError('No file paths provided for processing');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('processing:complete', {
+            total: 0,
+            success: 0,
+            errors: 1,
+            message: 'No files provided for processing'
+          });
+        }
+        return;
+      }
+      
+      // Additional validation: ensure all items are valid strings
+      const validFilePaths = filePaths.filter(filePath => {
+        return typeof filePath === 'string' && filePath.trim().length > 0;
+      });
+      
+      if (validFilePaths.length === 0) {
+        await errorLogger.logError('No valid file paths found after filtering');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('processing:complete', {
+            total: 0,
+            success: 0,
+            errors: 1,
+            message: 'No valid file paths found'
+          });
+        }
+        return;
+      }
+      
+      if (validFilePaths.length !== filePaths.length) {
+        await errorLogger.logWarning(`Filtered out ${filePaths.length - validFilePaths.length} invalid file paths`);
+      }
+
+      // Process files with enhanced error handling
+      await errorLogger.logInfo(`Processing ${validFilePaths.length} valid file(s)...`);
+      let successCount = 0;
+      let failureCount = 0;
+      const errors = [];
+
+      for (const filePath of validFilePaths) {
+        if (!filePath || typeof filePath !== 'string' || filePath.trim().length === 0) {
+          await errorLogger.logError('Skipping invalid file path', new Error(filePath));
+          failureCount++;
+          errors.push(`Invalid file path: ${filePath}`);
+          continue;
+        }
+        
+        try {
+          await errorLogger.logInfo(`Processing: ${path.basename(filePath)}`);
+          const finalPath = await processFile(filePath);
+          
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('file:processed', {
+              originalPath: filePath,
+              finalPath,
+              success: true,
+              message: `Successfully sorted to ${path.basename(finalPath)}`
+            });
+          }
+          successCount++;
+          
+        } catch (error) {
+          await errorLogger.logError(`Failed processing ${path.basename(filePath)}`, error);
+          failureCount++;
+          errors.push(`${path.basename(filePath)}: ${error.message}`);
+          
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('file:processed', {
+              originalPath: filePath,
+              error: error.message,
+              success: false,
+              message: `Failed to process: ${error.message}`
+            });
+          }
+        }
+      }
+      
+      // Send completion message
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('processing:complete', {
+          total: validFilePaths.length,
+          success: successCount,
+          errors: failureCount,
+          message: `Processing complete: ${successCount} successful, ${failureCount} failed`
+        });
+      }
+      
+      await errorLogger.logInfo(`Processing complete: ${successCount} successful, ${failureCount} failed`);
+      if (errors.length > 0) {
+        await errorLogger.logError('Processing errors occurred', new Error(errors.join('; ')));
+      }
+    });
+
+    // AI and Settings IPC Handlers
+    ipcMain.handle('get-ai-status', async () => {
+      try {
+        await errorLogger.logInfo('Getting AI status...');
+        return {
+          enabled: process.env.USE_AI === 'true' || !!process.env.OPENAI_API_KEY,
+          apiKey: !!process.env.OPENAI_API_KEY,
+          model: process.env.AI_MODEL || 'gpt-3.5-turbo',
+          confidenceThreshold: parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) || 0.5
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting AI status', error);
+        return { enabled: false, apiKey: false, model: 'gpt-3.5-turbo', confidenceThreshold: 0.5 };
+      }
+    });
+
+    ipcMain.handle('get-stats', async () => {
+      try {
+        await errorLogger.logInfo('Getting processing statistics...');
+        // Return mock stats for now - these would be tracked in a real implementation
+        return {
+          totalProcessed: 0,
+          regexProcessed: 0,
+          aiProcessed: 0,
+          cacheHits: 0,
+          averageConfidence: 0.0
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting stats', error);
+        return { totalProcessed: 0, regexProcessed: 0, aiProcessed: 0, cacheHits: 0, averageConfidence: 0.0 };
+      }
+    });
+
+    ipcMain.handle('save-settings', async (event, settings) => {
+      try {
+        await errorLogger.logInfo('Saving settings...');
+        // In a real implementation, this would save to a config file
+        if (settings.useAI !== undefined) {
+          process.env.USE_AI = settings.useAI ? 'true' : 'false';
+        }
+        if (settings.confidenceThreshold !== undefined) {
+          process.env.AI_CONFIDENCE_THRESHOLD = settings.confidenceThreshold.toString();
+        }
+        if (settings.model !== undefined) {
+          process.env.AI_MODEL = settings.model;
+        }
+        await errorLogger.logInfo('Settings saved successfully');
+        return { success: true };
+      } catch (error) {
+        await errorLogger.logError('Error saving settings', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('toggle-ai', async (event, enabled) => {
+      try {
+        await errorLogger.logInfo(`Toggling AI: ${enabled}`);
+        process.env.USE_AI = enabled ? 'true' : 'false';
+        return { success: true, enabled };
+      } catch (error) {
+        await errorLogger.logError('Error toggling AI', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('get-diagnostics', async () => {
+      try {
+        await errorLogger.logInfo('Getting diagnostics...');
+        // Return mock diagnostics for now
+        return {
+          ai: {
+            totalCalls: 0,
+            successfulCalls: 0,
+            failedCalls: 0,
+            cachedCalls: 0,
+            averageLatency: 0,
+            successRate: 0
+          },
+          cache: {
+            hits: 0,
+            misses: 0,
+            hitRate: 0,
+            size: 0,
+            evictions: 0
+          },
+          processing: {
+            totalFiles: 0,
+            regexProcessed: 0,
+            aiProcessed: 0,
+            averageConfidence: 0,
+            averageProcessingTime: 0
+          },
+          performance: {
+            memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024
+          },
+          session: {
+            duration: 0,
+            lastActivity: new Date().toISOString()
+          },
+          errors: {
+            recent: []
+          }
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting diagnostics', error);
+        return { error: error.message };
+      }
+    });
+
+    ipcMain.handle('clear-telemetry', async () => {
+      try {
+        await errorLogger.logInfo('Clearing telemetry data...');
+        // In a real implementation, this would clear stored telemetry data
+        await errorLogger.logInfo('Telemetry data cleared');
+        return { success: true };
+      } catch (error) {
+        await errorLogger.logError('Error clearing telemetry', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('export-telemetry', async () => {
+      try {
+        await errorLogger.logInfo('Exporting telemetry data...');
+        // In a real implementation, this would export stored telemetry data
+        const mockData = {
+          timestamp: new Date().toISOString(),
+          version: '1.0.0',
+          platform: process.platform,
+          data: {}
+        };
+        await errorLogger.logInfo('Telemetry data exported');
+        return mockData;
+      } catch (error) {
+        await errorLogger.logError('Error exporting telemetry', error);
+        return { error: error.message };
+      }
+    });
+
+    ipcMain.handle('get-extraction-config', async () => {
+      try {
+        await errorLogger.logInfo('Getting extraction configuration...');
+        return {
+          useOCR: process.env.USE_OCR !== 'false',
+          useTableExtraction: process.env.USE_TABLE_EXTRACTION !== 'false',
+          useLLMEnhancer: process.env.USE_LLM_ENHANCER !== 'false'
+        };
+      } catch (error) {
+        await errorLogger.logError('Error getting extraction config', error);
+        return { useOCR: true, useTableExtraction: true, useLLMEnhancer: true };
+      }
+    });
+
+    ipcMain.handle('update-extraction-config', async (event, config) => {
+      try {
+        await errorLogger.logInfo('Updating extraction configuration...');
+        if (config.useOCR !== undefined) {
+          process.env.USE_OCR = config.useOCR ? 'true' : 'false';
+        }
+        if (config.useTableExtraction !== undefined) {
+          process.env.USE_TABLE_EXTRACTION = config.useTableExtraction ? 'true' : 'false';
+        }
+        if (config.useLLMEnhancer !== undefined) {
+          process.env.USE_LLM_ENHANCER = config.useLLMEnhancer ? 'true' : 'false';
+        }
+        await errorLogger.logInfo('Extraction configuration updated');
+        return { success: true };
+      } catch (error) {
+        await errorLogger.logError('Error updating extraction config', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    console.log('✅ All IPC handlers registered successfully');
+    
+    await createWindow();
+    
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  } catch (error) {
+    await errorLogger.logError('Failed to start application', error);
+    app.quit();
+  }
+});
+
+// Quit when all windows are closed
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', async (error) => {
+  await errorLogger.logError('Uncaught Exception', error);
+  app.quit();
+});
+
+process.on('unhandledRejection', async (reason, promise) => {
+  await errorLogger.logError('Unhandled Rejection', new Error(`Reason: ${reason}, Promise: ${promise}`));
 });

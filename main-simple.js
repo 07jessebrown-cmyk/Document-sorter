@@ -1,3 +1,8 @@
+// DEPRECATED: This file has been consolidated into src/main/main.js
+// All functionality has been merged into the unified main file.
+// This file is kept for reference but should not be used.
+
+/*
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
