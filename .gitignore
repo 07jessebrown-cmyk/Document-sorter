@@ -128,3 +128,6 @@ screenshots/
 *.AppImage
 *.deb
 *.rpm
+
+# Settings and user data
+settings.json
