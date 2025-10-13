@@ -1,0 +1,5 @@
+# Server Environment Variables
+OPENAI_API_KEY=your_openai_api_key_here
+CLIENT_TOKEN=your_secure_client_token_here
+NODE_ENV=production
+PORT=10000
