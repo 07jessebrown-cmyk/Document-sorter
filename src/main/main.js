@@ -6,6 +6,10 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const os = require('os');
 
+// Import AI and Settings services
+const aiService = require('../services/aiService');
+const settingsService = require('../services/settingsService');
+
 // Enable full logging for debugging
 process.env.ELECTRON_ENABLE_LOGGING = '1';
 process.env.DEBUG = '*';
@@ -1256,6 +1260,70 @@ app.whenReady().then(async () => {
         return { success: true };
       } catch (error) {
         await errorLogger.logError('Error updating extraction config', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    // AI and Settings IPC Handlers
+    ipcMain.handle('ai:suggest-rename', async (event, filePath) => {
+      try {
+        await errorLogger.logInfo(`AI suggest rename requested for: ${path.basename(filePath)}`);
+        const apiKey = settingsService.getApiKey();
+        if (!apiKey) {
+          await errorLogger.logWarning('No API key configured for AI suggestions');
+          return { success: false, error: 'Please configure your OpenAI API key in Settings' };
+        }
+        const result = await aiService.suggestRename(filePath, apiKey);
+        await errorLogger.logInfo(`AI suggest rename completed: ${result.success ? 'success' : 'failed'}`);
+        return result;
+      } catch (error) {
+        await errorLogger.logError('Error in AI suggest rename', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('settings:save-api-key', async (event, apiKey) => {
+      try {
+        await errorLogger.logInfo('Saving API key...');
+        settingsService.saveApiKey(apiKey);
+        await errorLogger.logInfo('API key saved successfully');
+        return { success: true };
+      } catch (error) {
+        await errorLogger.logError('Error saving API key', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('settings:get-api-key', async () => {
+      try {
+        await errorLogger.logInfo('Getting API key...');
+        const apiKey = settingsService.getApiKey();
+        return apiKey;
+      } catch (error) {
+        await errorLogger.logError('Error getting API key', error);
+        return null;
+      }
+    });
+
+    ipcMain.handle('settings:has-api-key', async () => {
+      try {
+        await errorLogger.logInfo('Checking if API key exists...');
+        const hasKey = settingsService.hasApiKey();
+        return hasKey;
+      } catch (error) {
+        await errorLogger.logError('Error checking API key', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('settings:test-api-key', async (event, apiKey) => {
+      try {
+        await errorLogger.logInfo('Testing API key...');
+        const result = await aiService.testApiKey(apiKey);
+        await errorLogger.logInfo(`API key test completed: ${result.success ? 'success' : 'failed'}`);
+        return result;
+      } catch (error) {
+        await errorLogger.logError('Error testing API key', error);
         return { success: false, error: error.message };
       }
     });
