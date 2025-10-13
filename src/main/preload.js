@@ -28,5 +28,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Telemetry
   clearTelemetry: () => ipcRenderer.invoke('clear-telemetry'),
-  exportTelemetry: () => ipcRenderer.invoke('export-telemetry')
+  exportTelemetry: () => ipcRenderer.invoke('export-telemetry'),
+  
+  // AI and Settings
+  suggestRename: (filePath) => ipcRenderer.invoke('ai:suggest-rename', filePath),
+  saveApiKey: (key) => ipcRenderer.invoke('settings:save-api-key', key),
+  getApiKey: () => ipcRenderer.invoke('settings:get-api-key'),
+  hasApiKey: () => ipcRenderer.invoke('settings:has-api-key'),
+  testApiKey: (key) => ipcRenderer.invoke('settings:test-api-key', key)
 });
