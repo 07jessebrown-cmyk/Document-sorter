@@ -130,4 +130,5 @@ screenshots/
 *.rpm
 
 # Settings and user data
-settings.json
+settings.jsonnode_modules/
+server/node_modules/
