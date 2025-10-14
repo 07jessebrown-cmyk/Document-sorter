@@ -35,5 +35,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveApiKey: (key) => ipcRenderer.invoke('settings:save-api-key', key),
   getApiKey: () => ipcRenderer.invoke('settings:get-api-key'),
   hasApiKey: () => ipcRenderer.invoke('settings:has-api-key'),
-  testApiKey: (key) => ipcRenderer.invoke('settings:test-api-key', key)
+  testApiKey: (key) => ipcRenderer.invoke('settings:test-api-key', key),
+  renameFile: (oldPath, newName) => ipcRenderer.invoke('file:rename', oldPath, newName)
 });

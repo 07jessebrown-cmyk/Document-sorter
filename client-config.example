@@ -1,0 +1,9 @@
+# Client Configuration for Electron App
+# Copy this to .env in the project root
+
+# Backend Configuration
+BACKEND_URL=https://your-deployed-backend.onrender.com
+CLIENT_TOKEN=your_secure_client_token_here
+
+# Note: OpenAI API key is now handled by the backend server
+# No need to set OPENAI_API_KEY in the client

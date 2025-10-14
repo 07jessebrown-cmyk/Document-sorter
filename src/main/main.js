@@ -14,6 +14,10 @@ const settingsService = require('../services/settingsService');
 process.env.ELECTRON_ENABLE_LOGGING = '1';
 process.env.DEBUG = '*';
 
+// Backend proxy configuration
+process.env.BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
+process.env.CLIENT_TOKEN = process.env.CLIENT_TOKEN || 'your_secure_client_token_here';
+
 // Create comprehensive debug log file
 const debugLogPath = path.join(os.homedir(), 'Desktop', 'electron-debug.log');
 const debugLogStream = fs.createWriteStream(debugLogPath, { flags: 'a' });
@@ -1324,6 +1328,40 @@ app.whenReady().then(async () => {
         return result;
       } catch (error) {
         await errorLogger.logError('Error testing API key', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('file:rename', async (event, oldPath, newName) => {
+      try {
+        await errorLogger.logInfo(`Renaming file: ${path.basename(oldPath)} -> ${newName}`);
+        
+        // Validate inputs
+        if (!oldPath || !newName) {
+          throw new Error('Invalid file path or new name provided');
+        }
+        
+        // Ensure the old file exists
+        if (!fs.existsSync(oldPath)) {
+          throw new Error('Source file does not exist');
+        }
+        
+        // Get directory and construct new path
+        const dir = path.dirname(oldPath);
+        const newPath = path.join(dir, newName);
+        
+        // Check if new file already exists
+        if (fs.existsSync(newPath)) {
+          throw new Error('A file with that name already exists');
+        }
+        
+        // Rename the file
+        await fsp.rename(oldPath, newPath);
+        
+        await errorLogger.logInfo(`File renamed successfully: ${path.basename(oldPath)} -> ${newName}`);
+        return { success: true, newPath: newPath };
+      } catch (error) {
+        await errorLogger.logError('Error renaming file', error);
         return { success: false, error: error.message };
       }
     });

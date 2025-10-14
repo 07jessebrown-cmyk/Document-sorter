@@ -83,6 +83,14 @@ cancelSettingsBtn.addEventListener('click', closeSettingsModal);
 saveSettingsBtn.addEventListener('click', handleSaveSettings);
 aiConfidenceThreshold.addEventListener('input', updateConfidenceValue);
 
+// AI Settings event listeners
+document.getElementById('testApiKeyBtn')?.addEventListener('click', testApiKey);
+document.getElementById('saveApiKeyBtn')?.addEventListener('click', saveApiKey);
+document.getElementById('aiSuggestBtn')?.addEventListener('click', handleAISuggest);
+document.getElementById('closeSuggestionsBtn')?.addEventListener('click', () => {
+  document.getElementById('suggestionsModal').style.display = 'none';
+});
+
 // Table modal event listeners
 closeTableModal.addEventListener('click', closeTableModalHandler);
 closeTableModalBtn.addEventListener('click', closeTableModalHandler);
@@ -238,6 +246,12 @@ function addFilesToPending(paths, fileListLike = []) {
       addedCount += 1;
     }
   });
+  
+  // Set the first file as current for AI suggestions
+  if (paths.length > 0) {
+    currentFilePath = paths[0];
+  }
+  
   displayFilesFromPaths(Array.from(pendingFilePaths), fileListLike);
   return addedCount;
 }
@@ -362,6 +376,9 @@ function updateStatus(message, type = '') {
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   updateStatus('Ready to receive files');
+  
+  // Initialize AI functionality
+  initializeAI();
     
   // Listen for individual file processed events
   const _unsubscribeFileProcessed = window.electronAPI.onFileProcessed((payload) => {
@@ -674,6 +691,317 @@ function handleSettingsClick() {
 
 function closeSettingsModal() {
   settingsModal.style.display = 'none';
+}
+
+// AI Settings handlers (from OpenAi.md Day 3 Morning)
+let currentFilePath = null;
+let apiKeyConfigured = false;
+
+async function initializeAI() {
+  apiKeyConfigured = await window.electronAPI.hasApiKey();
+  const aiBtn = document.getElementById('aiSuggestBtn');
+  if (aiBtn) {
+    if (apiKeyConfigured) {
+      aiBtn.disabled = false;
+      aiBtn.title = 'Get AI-powered rename suggestions';
+    } else {
+      aiBtn.disabled = true;
+      aiBtn.title = 'Configure API key in Settings first';
+    }
+  }
+}
+
+async function loadSettings() {
+  try {
+    // Load AI status
+    const aiStatus = await window.electronAPI.getAIStatus();
+    if (aiStatus) {
+      useAIToggle.checked = aiStatus.enabled;
+    }
+    
+    // Load extraction configuration
+    const extractionConfig = await window.electronAPI.getExtractionConfig();
+    if (extractionConfig) {
+      useOCRToggle.checked = extractionConfig.useOCR || false;
+      useTableExtractionToggle.checked = extractionConfig.useTableExtraction || false;
+      useLLMEnhancerToggle.checked = extractionConfig.useLLMEnhancer !== false; // Default to true
+    }
+    
+    // Load processing statistics
+    const stats = await window.electronAPI.getStats();
+    if (stats) {
+      document.getElementById('totalProcessed').textContent = stats.totalProcessed || 0;
+      document.getElementById('regexProcessed').textContent = stats.regexProcessed || 0;
+      document.getElementById('aiProcessed').textContent = stats.aiProcessed || 0;
+      document.getElementById('cacheHits').textContent = stats.cacheHits || 0;
+      document.getElementById('averageConfidence').textContent = 
+        stats.averageConfidence ? `${Math.round(stats.averageConfidence * 100)}%` : '0%';
+    }
+    
+    // Load API key for AI settings
+    const apiKey = await window.electronAPI.getApiKey();
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    if (apiKeyInput && apiKey) {
+      apiKeyInput.value = apiKey;
+    }
+    
+    // Set confidence threshold
+    updateConfidenceValue();
+    
+    // Check if API key is configured and show prompt if not
+    if (!apiKey) {
+      showApiKeyPrompt();
+    }
+  } catch (error) {
+    console.error('Error loading settings:', error);
+  }
+}
+
+async function saveSettings() {
+  try {
+    const settings = {
+      useAI: useAIToggle.checked,
+      confidenceThreshold: parseFloat(aiConfidenceThreshold.value),
+      model: aiModel.value
+    };
+    
+    // Save settings via IPC
+    await window.electronAPI.saveSettings(settings);
+    
+    // Update AI status
+    await window.electronAPI.toggleAI(settings.useAI);
+    
+    // Save extraction configuration
+    const extractionConfig = {
+      useOCR: useOCRToggle.checked,
+      useTableExtraction: useTableExtractionToggle.checked,
+      useLLMEnhancer: useLLMEnhancerToggle.checked
+    };
+    
+    const extractionResult = await window.electronAPI.updateExtractionConfig(extractionConfig);
+    if (!extractionResult.success) {
+      console.warn('Failed to save extraction configuration:', extractionResult.error);
+    }
+    
+    updateStatus('Settings saved successfully', 'success');
+    closeSettingsModal();
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    updateStatus('Error saving settings', 'error');
+  }
+}
+
+async function saveApiKey() {
+  const input = document.getElementById('apiKeyInput');
+  const key = input.value.trim();
+  const msgDiv = document.getElementById('settingsMessage');
+  
+  if (!key) {
+    msgDiv.textContent = 'Please enter an API key';
+    msgDiv.style.color = 'red';
+    return;
+  }
+  
+  const result = await window.electronAPI.saveApiKey(key);
+  if (result.success) {
+    msgDiv.textContent = '✅ API key saved successfully!';
+    msgDiv.style.color = 'green';
+    apiKeyConfigured = true;
+    const aiBtn = document.getElementById('aiSuggestBtn');
+    if (aiBtn) {
+      aiBtn.disabled = false;
+    }
+    setTimeout(() => {
+      document.getElementById('settingsModal').style.display = 'none';
+    }, 1500);
+  } else {
+    msgDiv.textContent = `Error: ${result.error}`;
+    msgDiv.style.color = 'red';
+  }
+}
+
+async function testApiKey() {
+  const input = document.getElementById('apiKeyInput');
+  const key = input.value.trim();
+  const msgDiv = document.getElementById('settingsMessage');
+  
+  if (!key) {
+    msgDiv.textContent = 'Please enter an API key';
+    msgDiv.style.color = 'red';
+    return;
+  }
+  
+  msgDiv.textContent = 'Testing connection...';
+  msgDiv.style.color = 'blue';
+  
+  const result = await window.electronAPI.testApiKey(key);
+  if (result.success) {
+    msgDiv.textContent = '✅ Connection successful! API key is valid.';
+    msgDiv.style.color = 'green';
+  } else {
+    msgDiv.textContent = `❌ ${result.error}`;
+    msgDiv.style.color = 'red';
+  }
+}
+
+function showApiKeyPrompt() {
+  const prompt = document.createElement('div');
+  prompt.id = 'apiKeyPrompt';
+  prompt.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+    max-width: 300px;
+  `;
+  prompt.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong>Configure API Key</strong><br>
+        <small>Get AI-powered rename suggestions</small>
+      </div>
+      <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 18px; cursor: pointer;">&times;</button>
+    </div>
+    <button onclick="document.getElementById('settingsBtn').click()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+      Open Settings
+    </button>
+  `;
+  document.body.appendChild(prompt);
+  
+  // Auto-remove after 10 seconds
+  setTimeout(() => {
+    if (prompt.parentNode) {
+      prompt.remove();
+    }
+  }, 10000);
+}
+
+// AI Suggestion functionality
+async function handleAISuggest() {
+  if (!currentFilePath) {
+    updateStatus('Please select a file first', 'error');
+    return;
+  }
+  
+  if (!apiKeyConfigured) {
+    updateStatus('Please configure your API key in Settings first', 'error');
+    document.getElementById('settingsBtn').click();
+    return;
+  }
+  
+  const btn = document.getElementById('aiSuggestBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing...';
+  
+  try {
+    const result = await window.electronAPI.suggestRename(currentFilePath);
+    
+    if (result.success) {
+      if (result.suggestions && result.suggestions.length > 0) {
+        showSuggestionsModal(result.suggestions, currentFilePath);
+      } else {
+        updateStatus('No suggestions generated. Please try again.', 'error');
+      }
+    } else {
+      // Handle specific error cases
+      if (result.error.includes('Invalid API key')) {
+        updateStatus('Invalid API key. Please check your settings.', 'error');
+        document.getElementById('settingsBtn').click();
+      } else if (result.error.includes('Rate limit')) {
+        updateStatus('Rate limit exceeded. Please try again in a moment.', 'error');
+      } else if (result.error.includes('Network error')) {
+        updateStatus('Network error. Please check your internet connection.', 'error');
+      } else {
+        updateStatus(`Error: ${result.error}`, 'error');
+      }
+    }
+  } catch (error) {
+    console.error('Error getting AI suggestions:', error);
+    updateStatus(`Error: ${error.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Get AI Suggestions';
+  }
+}
+
+function showSuggestionsModal(suggestions, filePath) {
+  const modal = document.getElementById('suggestionsModal');
+  const originalName = document.getElementById('originalFilename');
+  const list = document.getElementById('suggestionsList');
+  
+  originalName.textContent = filePath.split('/').pop();
+  list.innerHTML = '';
+  
+  suggestions.forEach((suggestion, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn suggestion-btn';
+    btn.textContent = `${i + 1}. ${suggestion}`;
+    btn.onclick = () => applyRename(filePath, suggestion);
+    list.appendChild(btn);
+  });
+  
+  modal.style.display = 'block';
+}
+
+async function applyRename(oldPath, newName) {
+  try {
+    // Call the main process to rename the file
+    const result = await window.electronAPI.renameFile(oldPath, newName);
+    
+    if (result.success) {
+      // Update the UI to reflect the new filename
+      updateFileListAfterRename(oldPath, result.newPath);
+      
+      // Close the suggestions modal
+      document.getElementById('suggestionsModal').style.display = 'none';
+      
+      // Show success message
+      updateStatus(`✅ File renamed to: ${newName}`, 'success');
+      
+      // Update the current file path if this was the current file
+      if (currentFilePath === oldPath) {
+        currentFilePath = result.newPath;
+      }
+    } else {
+      alert(`Error renaming file: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error applying rename:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+function updateFileListAfterRename(oldPath, newPath) {
+  // Update the pending file paths set
+  if (pendingFilePaths.has(oldPath)) {
+    pendingFilePaths.delete(oldPath);
+    pendingFilePaths.add(newPath);
+  }
+  
+  // Update the file metadata map
+  if (fileMetadata.has(oldPath)) {
+    const metadata = fileMetadata.get(oldPath);
+    fileMetadata.delete(oldPath);
+    fileMetadata.set(newPath, metadata);
+  }
+  
+  // Update the file list display
+  const listItem = document.querySelector(`#fileListItems .file-item[data-path="${CSS.escape(oldPath)}"]`);
+  if (listItem) {
+    listItem.dataset.path = newPath;
+    const fileNameSpan = listItem.querySelector('.file-name');
+    if (fileNameSpan) {
+      fileNameSpan.textContent = newPath.split(/[\\/]/).pop();
+    }
+  }
+  
+  // Update the preview table
+  updatePreviewTable();
 }
 
 // Table modal functions

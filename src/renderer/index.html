@@ -18,6 +18,7 @@
             <div class="controls">
                 <button id="browseBtn" class="btn">Browse</button>
                 <button id="startSortingBtn" class="btn primary">Start Sorting</button>
+                <button id="aiSuggestBtn" class="btn" disabled>✨ Get AI Suggestions</button>
                 <button id="settingsBtn" class="btn">Settings</button>
                 <input id="fileInput" type="file" multiple style="display:none" />
             </div>
@@ -100,6 +101,23 @@
                             <option value="gpt-4-turbo">GPT-4 Turbo</option>
                         </select>
                         <p class="setting-description">Select the AI model for document analysis</p>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <h3>AI Settings</h3>
+                        <div class="ai-settings">
+                            <label for="apiKeyInput" class="setting-label">OpenAI API Key:</label>
+                            <input type="password" id="apiKeyInput" placeholder="sk-proj-..." style="width: 100%; margin: 10px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <p class="setting-description">
+                                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a><br>
+                                Estimated cost: ~$0.0002 per document ($0.20 per 1000 documents)
+                            </p>
+                            <div style="margin-top: 10px;">
+                                <button id="testApiKeyBtn" class="btn" style="margin-right: 10px;">Test Connection</button>
+                                <button id="saveApiKeyBtn" class="btn btn-primary">Save API Key</button>
+                            </div>
+                            <div id="settingsMessage" style="margin-top: 10px;"></div>
+                        </div>
                     </div>
                     
                     <div class="setting-group">
@@ -295,12 +313,28 @@
             </div>
         </div>
         
+        <!-- AI Suggestions Modal -->
+        <div id="suggestionsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>AI Suggested Filenames</h2>
+                    <span class="close" id="closeSuggestionsBtn">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Original:</strong> <span id="originalFilename"></span></p>
+                    <div id="suggestionsList"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="closeSuggestionsBtn" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
         <footer>
             <p>Document Sorter v1.1 (AI Enhanced)</p>
         </footer>
     </div>
     
-    <script src="../main/preload.js"></script>
     <script src="./renderer.js"></script>
 </body>
 </html>

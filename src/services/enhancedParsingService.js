@@ -1,6 +1,6 @@
 const ParsingService = require('./parsingService');
 const AITextService = require('./aiTextService');
-const LLMClient = require('./llmClient');
+const LLMClientBackend = require('./llmClientBackend');
 const AICache = require('./aiCache');
 const ConfigService = require('./configService');
 const TableExtractorService = require('./tableExtractor');
@@ -249,10 +249,10 @@ class EnhancedParsingService extends ParsingService {
    */
   async initializeAIServices() {
     try {
-      // Initialize LLM Client
-      this.llmClient = new LLMClient({
-        apiKey: process.env.OPENAI_API_KEY || process.env.AI_API_KEY,
-        baseURL: process.env.AI_BASE_URL,
+      // Initialize LLM Client with Backend Proxy
+      this.llmClient = new LLMClientBackend({
+        baseURL: process.env.BACKEND_URL || 'http://localhost:3000',
+        clientToken: process.env.CLIENT_TOKEN || 'your_secure_client_token_here',
         defaultModel: process.env.AI_MODEL || 'gpt-3.5-turbo',
         maxRetries: 3,
         retryDelay: 1000,
