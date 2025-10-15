@@ -75,6 +75,7 @@ CRITICAL REQUIREMENTS:
 4. Provide confidence scores as numbers between 0.0 and 1.0
 5. If information is not found, use null for the value and 0.0 for confidence
 6. Extract relevant text snippets that support your findings
+7. Extract ACTUAL values from the document - do not guess or make assumptions
 
 REQUIRED JSON STRUCTURE:
 {
@@ -84,15 +85,44 @@ REQUIRED JSON STRUCTURE:
   "dateConfidence": "number between 0.0 and 1.0", 
   "docType": "string or null",
   "docTypeConfidence": "number between 0.0 and 1.0",
+  "overallConfidence": "number between 0.0 and 1.0",
   "snippets": ["array of supporting text snippets"]
 }
 
+DOCUMENT TYPES - Choose the MOST APPROPRIATE from this list:
+- Invoice: Bills, invoices, billing statements
+- Receipt: Payment receipts, purchase receipts, transaction receipts
+- Contract: Service agreements, contracts, legal agreements, terms of service
+- Purchase Order: PO documents, purchase orders, procurement documents
+- Statement: Bank statements, account statements, financial statements
+- Report: Financial reports, analysis reports, status reports, audit reports
+- Quote: Price quotes, estimates, proposals
+- Resume: CV, curriculum vitae, job applications
+- Certificate: Certificates, diplomas, awards, credentials
+- Manual: Instruction manuals, guides, documentation
+- Letter: Business letters, correspondence, formal letters
+- Unknown: If document type is unclear or doesn't fit other categories
+
 FIELD GUIDELINES:
-- clientName: Company, organization, or person name (e.g., "Acme Corporation", "John Smith")
-- date: Document date in YYYY-MM-DD format (e.g., "2024-01-15")
-- docType: Document type (e.g., "Invoice", "Contract", "Receipt", "Statement", "Report")
+- clientName: Extract the ACTUAL company, organization, or person name from the document (e.g., "Acme Corporation", "John Smith", "Microsoft Corp")
+- date: Extract the ACTUAL date in YYYY-MM-DD format (e.g., "2024-01-15", "2025-09-17")
+- docType: Choose from the structured list above - be specific and accurate
+- overallConfidence: Overall confidence in the extraction (0.95+ when all data is clear, lower for ambiguity)
 - snippets: Array of 1-3 relevant text excerpts that support your findings
-- confidence: How certain you are (0.0 = not found, 1.0 = very certain)`;
+
+CONFIDENCE SCORING:
+- 0.95-1.0: All data clearly visible and unambiguous
+- 0.80-0.94: Most data clear with minor ambiguity
+- 0.60-0.79: Some data clear but some uncertainty
+- 0.40-0.59: Significant ambiguity or missing key data
+- 0.0-0.39: Very unclear or no relevant data found
+
+EXTRACTION PRIORITY:
+1. Look for explicit document headers (INVOICE, RECEIPT, CONTRACT, etc.)
+2. Find company names in "Bill to:", "From:", "Client:", "Customer:" fields
+3. Extract dates from "Date:", "Invoice Date:", "Effective Date:", etc.
+4. Use table data if present - it often contains the most reliable information
+5. If unsure about document type, use "Unknown" rather than guessing`;
 
   if (!includeExamples) {
     return baseInstructions;
@@ -102,39 +132,55 @@ FIELD GUIDELINES:
 
 EXAMPLES:
 
-Example 1 - Invoice:
-Input: "INVOICE #12345\\nAcme Corporation\\n123 Business St\\nInvoice Date: January 15, 2024\\nAmount Due: $1,500.00"
+Example 1 - Clear Invoice:
+Input: "INVOICE #12345\\nBill to: Acme Corporation\\n123 Business St\\nInvoice Date: January 15, 2024\\nAmount Due: $1,500.00"
 Output: {
   "clientName": "Acme Corporation",
-  "clientConfidence": 0.95,
+  "clientConfidence": 0.98,
   "date": "2024-01-15",
-  "dateConfidence": 0.90,
+  "dateConfidence": 0.95,
   "docType": "Invoice",
-  "docTypeConfidence": 0.98,
-  "snippets": ["INVOICE #12345", "Acme Corporation", "Invoice Date: January 15, 2024"]
+  "docTypeConfidence": 0.99,
+  "overallConfidence": 0.97,
+  "snippets": ["INVOICE #12345", "Bill to: Acme Corporation", "Invoice Date: January 15, 2024"]
 }
 
-Example 2 - Contract:
-Input: "SERVICE AGREEMENT\\nBetween ABC Company and XYZ Corp\\nEffective Date: March 1, 2024\\nThis agreement covers..."
+Example 2 - Contract with Clear Data:
+Input: "SERVICE AGREEMENT\\nBetween ABC Company and XYZ Corp\\nEffective Date: March 1, 2024\\nThis agreement covers software development services..."
 Output: {
   "clientName": "ABC Company",
-  "clientConfidence": 0.85,
+  "clientConfidence": 0.90,
   "date": "2024-03-01", 
-  "dateConfidence": 0.80,
+  "dateConfidence": 0.88,
   "docType": "Contract",
-  "docTypeConfidence": 0.90,
+  "docTypeConfidence": 0.95,
+  "overallConfidence": 0.91,
   "snippets": ["SERVICE AGREEMENT", "Between ABC Company and XYZ Corp", "Effective Date: March 1, 2024"]
 }
 
-Example 3 - Unclear Document:
+Example 3 - Receipt with Partial Data:
+Input: "RECEIPT\\nThank you for your payment\\nTransaction #: TXN-789\\nDate: 12/15/2023\\nAmount: $150.00\\nPayment Method: Credit Card"
+Output: {
+  "clientName": null,
+  "clientConfidence": 0.0,
+  "date": "2023-12-15",
+  "dateConfidence": 0.85,
+  "docType": "Receipt",
+  "docTypeConfidence": 0.92,
+  "overallConfidence": 0.59,
+  "snippets": ["RECEIPT", "Date: 12/15/2023", "Amount: $150.00"]
+}
+
+Example 4 - Unclear Document:
 Input: "Random text with no clear structure or identifiable information"
 Output: {
   "clientName": null,
   "clientConfidence": 0.0,
   "date": null,
   "dateConfidence": 0.0,
-  "docType": null,
+  "docType": "Unknown",
   "docTypeConfidence": 0.0,
+  "overallConfidence": 0.0,
   "snippets": []
 }`;
 
@@ -256,6 +302,7 @@ function validateResponse(response) {
       'clientName', 'clientConfidence', 
       'date', 'dateConfidence',
       'docType', 'docTypeConfidence', 
+      'overallConfidence',
       'snippets'
     ];
 
@@ -288,6 +335,9 @@ function validateResponse(response) {
     }
     if (typeof parsed.docTypeConfidence !== 'number' || parsed.docTypeConfidence < 0 || parsed.docTypeConfidence > 1) {
       typeErrors.push('docTypeConfidence must be number between 0.0 and 1.0');
+    }
+    if (typeof parsed.overallConfidence !== 'number' || parsed.overallConfidence < 0 || parsed.overallConfidence > 1) {
+      typeErrors.push('overallConfidence must be number between 0.0 and 1.0');
     }
     if (!Array.isArray(parsed.snippets)) {
       typeErrors.push('snippets must be an array');

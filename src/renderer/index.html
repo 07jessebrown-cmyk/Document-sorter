@@ -106,15 +106,13 @@
                     <div class="setting-group">
                         <h3>AI Settings</h3>
                         <div class="ai-settings">
-                            <label for="apiKeyInput" class="setting-label">OpenAI API Key:</label>
-                            <input type="password" id="apiKeyInput" placeholder="sk-proj-..." style="width: 100%; margin: 10px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <p class="setting-description">
-                                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a><br>
-                                Estimated cost: ~$0.0002 per document ($0.20 per 1000 documents)
-                            </p>
+                            <div class="setting-description">
+                                <p><strong>✅ AI services are now managed by the backend server</strong></p>
+                                <p>API keys are securely stored on the server and never exposed to the client application.</p>
+                                <p>Estimated cost: ~$0.0002 per document ($0.20 per 1000 documents)</p>
+                            </div>
                             <div style="margin-top: 10px;">
-                                <button id="testApiKeyBtn" class="btn" style="margin-right: 10px;">Test Connection</button>
-                                <button id="saveApiKeyBtn" class="btn btn-primary">Save API Key</button>
+                                <button id="testBackendConnectionBtn" class="btn btn-primary">Test Backend Connection</button>
                             </div>
                             <div id="settingsMessage" style="margin-top: 10px;"></div>
                         </div>
@@ -326,6 +324,48 @@
                 </div>
                 <div class="modal-footer">
                     <button id="closeSuggestionsBtn" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Error Modal -->
+        <div id="errorModal" class="modal" style="display: none;">
+            <div class="modal-content error-modal">
+                <div class="modal-header">
+                    <h2 id="errorTitle">Error</h2>
+                    <span class="close" id="closeErrorBtn">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="error-icon" id="errorIcon">⚠️</div>
+                    <p id="errorMessage">An error occurred</p>
+                    <div id="errorDetails" class="error-details" style="display: none;">
+                        <details>
+                            <summary>Technical Details</summary>
+                            <pre id="errorTechnicalDetails"></pre>
+                        </details>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="errorActionBtn" class="btn primary" style="display: none;"></button>
+                    <button id="errorRetryBtn" class="btn" style="display: none;">Retry</button>
+                    <button id="errorCloseBtn" class="btn">Close</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Loading Modal -->
+        <div id="loadingModal" class="modal" style="display: none;">
+            <div class="modal-content loading-modal">
+                <div class="modal-body">
+                    <div class="loading-spinner"></div>
+                    <h3 id="loadingTitle">Processing...</h3>
+                    <p id="loadingMessage">Please wait while we process your request</p>
+                    <div class="loading-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <span id="loadingProgress">0%</span>
+                    </div>
                 </div>
             </div>
         </div>

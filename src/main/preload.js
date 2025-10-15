@@ -32,9 +32,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // AI and Settings
   suggestRename: (filePath) => ipcRenderer.invoke('ai:suggest-rename', filePath),
-  saveApiKey: (key) => ipcRenderer.invoke('settings:save-api-key', key),
-  getApiKey: () => ipcRenderer.invoke('settings:get-api-key'),
-  hasApiKey: () => ipcRenderer.invoke('settings:has-api-key'),
-  testApiKey: (key) => ipcRenderer.invoke('settings:test-api-key', key),
+  testBackendConnection: () => ipcRenderer.invoke('test-backend-connection'),
   renameFile: (oldPath, newName) => ipcRenderer.invoke('file:rename', oldPath, newName)
 });

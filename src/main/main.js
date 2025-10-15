@@ -1,3 +1,6 @@
+// Load environment variables
+require('dotenv').config();
+
 // Import required modules
 const electron = require('electron');
 const { app, BrowserWindow, ipcMain, Menu, dialog } = electron;
@@ -6,9 +9,8 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const os = require('os');
 
-// Import AI and Settings services
+// Import AI services
 const aiService = require('../services/aiService');
-const settingsService = require('../services/settingsService');
 
 // Enable full logging for debugging
 process.env.ELECTRON_ENABLE_LOGGING = '1';
@@ -16,7 +18,7 @@ process.env.DEBUG = '*';
 
 // Backend proxy configuration
 process.env.BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
-process.env.CLIENT_TOKEN = process.env.CLIENT_TOKEN || 'your_secure_client_token_here';
+process.env.CLIENT_TOKEN = process.env.CLIENT_TOKEN || '785e4defad269cdc65f10c9ee9d418a2bc1bc97cfbbdb01b76d3ded5d2cca6b8';
 
 // Create comprehensive debug log file
 const debugLogPath = path.join(os.homedir(), 'Desktop', 'electron-debug.log');
@@ -723,6 +725,47 @@ function analyzeDocument(text, filePath) {
   return result;
 }
 
+// Reusable analysis function that extracts steps 1-2 from processFile()
+async function analyzeFileOnly(filePath) {
+  await errorLogger.logInfo(`Starting analysis-only processing: ${path.basename(filePath)}`);
+  
+  try {
+    // 1) Extract text using unified file handling
+    let extractedText = '';
+    try {
+      extractedText = await extractText(filePath);
+      await errorLogger.logInfo(`Text extraction completed: ${extractedText.length} characters`);
+    } catch (extractionError) {
+      await errorLogger.logError(`Text extraction failed for ${path.basename(filePath)}`, extractionError);
+      throw new Error(`Text extraction failed: ${extractionError.message}`);
+    }
+
+    // 2) Analyze text with enhanced parsing service or fallback
+    await errorLogger.logInfo(`Analyzing document: ${path.basename(filePath)}`);
+    let analysis;
+    
+    if (enhancedParsingService) {
+      try {
+        analysis = await enhancedParsingService.analyzeDocumentEnhanced(extractedText, filePath);
+        await errorLogger.logInfo('Enhanced analysis completed');
+      } catch (enhancedError) {
+        await errorLogger.logWarning('Enhanced parsing failed, falling back to basic analysis', enhancedError);
+        analysis = analyzeDocument(extractedText, filePath);
+      }
+    } else {
+      analysis = analyzeDocument(extractedText, filePath);
+      await errorLogger.logInfo('Basic analysis completed');
+    }
+
+    await errorLogger.logInfo(`Analysis-only processing completed: ${path.basename(filePath)}`);
+    return analysis;
+    
+  } catch (error) {
+    await errorLogger.logError(`Analysis-only processing failed for ${path.basename(filePath)}`, error);
+    throw error;
+  }
+}
+
 async function processFile(filePath) {
   await errorLogger.logInfo(`Starting processing: ${path.basename(filePath)}`);
   
@@ -1099,15 +1142,21 @@ app.whenReady().then(async () => {
     ipcMain.handle('get-ai-status', async () => {
       try {
         await errorLogger.logInfo('Getting AI status...');
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+        const clientToken = process.env.CLIENT_TOKEN;
+        
+        // Check if backend is configured
+        const backendConfigured = !!(backendUrl && clientToken);
+        
         return {
-          enabled: process.env.USE_AI === 'true' || !!process.env.OPENAI_API_KEY,
-          apiKey: !!process.env.OPENAI_API_KEY,
+          enabled: process.env.USE_AI === 'true' || backendConfigured,
+          backendConfigured: backendConfigured,
           model: process.env.AI_MODEL || 'gpt-3.5-turbo',
           confidenceThreshold: parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) || 0.5
         };
       } catch (error) {
         await errorLogger.logError('Error getting AI status', error);
-        return { enabled: false, apiKey: false, model: 'gpt-3.5-turbo', confidenceThreshold: 0.5 };
+        return { enabled: false, backendConfigured: false, model: 'gpt-3.5-turbo', confidenceThreshold: 0.5 };
       }
     });
 
@@ -1270,64 +1319,197 @@ app.whenReady().then(async () => {
 
     // AI and Settings IPC Handlers
     ipcMain.handle('ai:suggest-rename', async (event, filePath) => {
+      const startTime = Date.now();
+      const timeout = 30000; // 30 second timeout
+      
       try {
         await errorLogger.logInfo(`AI suggest rename requested for: ${path.basename(filePath)}`);
-        const apiKey = settingsService.getApiKey();
-        if (!apiKey) {
-          await errorLogger.logWarning('No API key configured for AI suggestions');
-          return { success: false, error: 'Please configure your OpenAI API key in Settings' };
+        
+        // Check if backend is available
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+        const clientToken = process.env.CLIENT_TOKEN;
+        
+        if (!clientToken) {
+          return { 
+            success: false, 
+            error: 'Backend not configured. Please check your settings.',
+            errorType: 'configuration'
+          };
         }
-        const result = await aiService.suggestRename(filePath, apiKey);
-        await errorLogger.logInfo(`AI suggest rename completed: ${result.success ? 'success' : 'failed'}`);
-        return result;
+        
+        // Extract text from file first
+        let text = '';
+        try {
+          text = await extractText(filePath);
+        } catch (extractError) {
+          await errorLogger.logError('Failed to extract text for AI analysis', extractError);
+          return { 
+            success: false, 
+            error: 'Failed to extract text from file. The file may be corrupted or in an unsupported format.',
+            errorType: 'extraction',
+            canRetry: true
+          };
+        }
+        
+        if (!text || text.trim().length === 0) {
+          return { 
+            success: false, 
+            error: 'No text content found in file. Please try with a different document.',
+            errorType: 'content',
+            canRetry: false
+          };
+        }
+        
+        // Create timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Request timeout - please try again'));
+          }, timeout);
+        });
+        
+        // Call backend AI service with timeout
+        const fetchPromise = fetch(`${backendUrl}/api/process-document`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Client-Token': clientToken
+          },
+          body: JSON.stringify({
+            text: text,
+            instructions: 'Analyze this document and suggest a descriptive filename. Return only the suggested filename without any explanation or additional text.'
+          })
+        });
+        
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (!response.ok) {
+          let errorMessage = 'Backend AI service error';
+          let errorType = 'api';
+          let canRetry = true;
+          
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+            
+            // Handle specific HTTP status codes
+            if (response.status === 401) {
+              errorMessage = 'Invalid API key. Please check your settings.';
+              errorType = 'authentication';
+              canRetry = false;
+            } else if (response.status === 429) {
+              errorMessage = 'Rate limit exceeded. Please try again in a moment.';
+              errorType = 'rate_limit';
+              canRetry = true;
+            } else if (response.status >= 500) {
+              errorMessage = 'Server error. Please try again later.';
+              errorType = 'server';
+              canRetry = true;
+            }
+          } catch (parseError) {
+            errorMessage = `Backend service error (${response.status})`;
+          }
+          
+          await errorLogger.logError('Backend AI service failed', new Error(errorMessage));
+          return { 
+            success: false, 
+            error: errorMessage,
+            errorType: errorType,
+            canRetry: canRetry
+          };
+        }
+        
+        const data = await response.json();
+        const suggestedName = data.choices?.[0]?.message?.content?.trim();
+        
+        if (!suggestedName) {
+          return { 
+            success: false, 
+            error: 'No suggestion received from AI service. Please try again.',
+            errorType: 'api',
+            canRetry: true
+          };
+        }
+        
+        // Clean up the suggested name and create multiple variations
+        const cleanName = suggestedName.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+        const ext = path.extname(filePath);
+        const baseName = cleanName.endsWith(ext) ? cleanName.replace(ext, '') : cleanName;
+        
+        // Generate 3 variations of the suggested name
+        const suggestions = [
+          baseName + ext,
+          baseName + '_v1' + ext,
+          baseName + '_' + new Date().toISOString().split('T')[0] + ext
+        ];
+        
+        const processingTime = Date.now() - startTime;
+        await errorLogger.logInfo(`AI suggest rename completed: ${suggestions[0]} (${processingTime}ms)`);
+        return { 
+          success: true, 
+          suggestions: suggestions,
+          processingTime: processingTime
+        };
       } catch (error) {
+        const processingTime = Date.now() - startTime;
         await errorLogger.logError('Error in AI suggest rename', error);
-        return { success: false, error: error.message };
+        
+        // Handle specific error types
+        let errorMessage = error.message;
+        let errorType = 'unknown';
+        let canRetry = true;
+        
+        if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
+          errorMessage = 'Request timed out. Please check your internet connection and try again.';
+          errorType = 'timeout';
+          canRetry = true;
+        } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+          errorMessage = 'Network error. Please check your internet connection.';
+          errorType = 'network';
+          canRetry = true;
+        } else if (error.message.includes('fetch')) {
+          errorMessage = 'Failed to connect to AI service. Please check your internet connection.';
+          errorType = 'network';
+          canRetry = true;
+        }
+        
+        return { 
+          success: false, 
+          error: errorMessage,
+          errorType: errorType,
+          canRetry: canRetry,
+          processingTime: processingTime
+        };
       }
     });
 
-    ipcMain.handle('settings:save-api-key', async (event, apiKey) => {
+    ipcMain.handle('test-backend-connection', async () => {
       try {
-        await errorLogger.logInfo('Saving API key...');
-        settingsService.saveApiKey(apiKey);
-        await errorLogger.logInfo('API key saved successfully');
-        return { success: true };
+        await errorLogger.logInfo('Testing backend connection...');
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+        const clientToken = process.env.CLIENT_TOKEN;
+        
+        if (!clientToken) {
+          return { success: false, error: 'Client token not configured' };
+        }
+        
+        // Test backend health endpoint
+        const response = await fetch(`${backendUrl}/health`, {
+          method: 'GET',
+          headers: {
+            'X-Client-Token': clientToken
+          },
+          timeout: 5000
+        });
+        
+        if (response.ok) {
+          await errorLogger.logInfo('Backend connection test successful');
+          return { success: true };
+        } else {
+          await errorLogger.logWarning(`Backend connection test failed: ${response.status}`);
+          return { success: false, error: `Backend returned status ${response.status}` };
+        }
       } catch (error) {
-        await errorLogger.logError('Error saving API key', error);
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle('settings:get-api-key', async () => {
-      try {
-        await errorLogger.logInfo('Getting API key...');
-        const apiKey = settingsService.getApiKey();
-        return apiKey;
-      } catch (error) {
-        await errorLogger.logError('Error getting API key', error);
-        return null;
-      }
-    });
-
-    ipcMain.handle('settings:has-api-key', async () => {
-      try {
-        await errorLogger.logInfo('Checking if API key exists...');
-        const hasKey = settingsService.hasApiKey();
-        return hasKey;
-      } catch (error) {
-        await errorLogger.logError('Error checking API key', error);
-        return false;
-      }
-    });
-
-    ipcMain.handle('settings:test-api-key', async (event, apiKey) => {
-      try {
-        await errorLogger.logInfo('Testing API key...');
-        const result = await aiService.testApiKey(apiKey);
-        await errorLogger.logInfo(`API key test completed: ${result.success ? 'success' : 'failed'}`);
-        return result;
-      } catch (error) {
-        await errorLogger.logError('Error testing API key', error);
+        await errorLogger.logError('Backend connection test failed', error);
         return { success: false, error: error.message };
       }
     });
@@ -1363,6 +1545,40 @@ app.whenReady().then(async () => {
       } catch (error) {
         await errorLogger.logError('Error renaming file', error);
         return { success: false, error: error.message };
+      }
+    });
+
+    // Missing IPC handler for 'analyze-file' - provides analysis without file operations
+    ipcMain.handle('analyze-file', async (event, filePath) => {
+      try {
+        await errorLogger.logInfo(`Analyze file requested: ${path.basename(filePath)}`);
+        
+        // Validate input
+        if (!filePath || typeof filePath !== 'string' || filePath.trim().length === 0) {
+          throw new Error('Invalid file path provided');
+        }
+        
+        // Ensure the file exists
+        if (!fs.existsSync(filePath)) {
+          throw new Error('File does not exist');
+        }
+        
+        // Perform analysis-only processing (no file operations)
+        const analysis = await analyzeFileOnly(filePath);
+        
+        await errorLogger.logInfo(`File analysis completed: ${path.basename(filePath)} - Type: ${analysis.type}, Confidence: ${analysis.confidence}`);
+        return { 
+          success: true, 
+          analysis: analysis,
+          message: `Analysis completed: ${analysis.type} (${Math.round(analysis.confidence * 100)}% confidence)`
+        };
+      } catch (error) {
+        await errorLogger.logError(`Error analyzing file: ${path.basename(filePath)}`, error);
+        return { 
+          success: false, 
+          error: error.message,
+          message: `Analysis failed: ${error.message}`
+        };
       }
     });
 

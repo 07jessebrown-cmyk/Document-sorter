@@ -84,11 +84,47 @@ saveSettingsBtn.addEventListener('click', handleSaveSettings);
 aiConfidenceThreshold.addEventListener('input', updateConfidenceValue);
 
 // AI Settings event listeners
-document.getElementById('testApiKeyBtn')?.addEventListener('click', testApiKey);
-document.getElementById('saveApiKeyBtn')?.addEventListener('click', saveApiKey);
+document.getElementById('testBackendConnectionBtn')?.addEventListener('click', testBackendConnection);
 document.getElementById('aiSuggestBtn')?.addEventListener('click', handleAISuggest);
 document.getElementById('closeSuggestionsBtn')?.addEventListener('click', () => {
   document.getElementById('suggestionsModal').style.display = 'none';
+});
+
+// Error Modal Event Listeners
+document.getElementById('closeErrorBtn')?.addEventListener('click', hideErrorModal);
+document.getElementById('errorCloseBtn')?.addEventListener('click', hideErrorModal);
+
+// Close modals when clicking outside
+document.addEventListener('click', (event) => {
+  const errorModal = document.getElementById('errorModal');
+  const loadingModal = document.getElementById('loadingModal');
+  const suggestionsModal = document.getElementById('suggestionsModal');
+  
+  if (event.target === errorModal) {
+    hideErrorModal();
+  }
+  if (event.target === loadingModal) {
+    // Don't close loading modal when clicking outside
+  }
+  if (event.target === suggestionsModal) {
+    suggestionsModal.style.display = 'none';
+  }
+});
+
+// Close modals with Escape key
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    const errorModal = document.getElementById('errorModal');
+    const loadingModal = document.getElementById('loadingModal');
+    const suggestionsModal = document.getElementById('suggestionsModal');
+    
+    if (errorModal.style.display === 'block') {
+      hideErrorModal();
+    } else if (suggestionsModal.style.display === 'block') {
+      suggestionsModal.style.display = 'none';
+    }
+    // Don't close loading modal with Escape key
+  }
 });
 
 // Table modal event listeners
@@ -698,7 +734,8 @@ let currentFilePath = null;
 let apiKeyConfigured = false;
 
 async function initializeAI() {
-  apiKeyConfigured = await window.electronAPI.hasApiKey();
+  const aiStatus = await window.electronAPI.getAIStatus();
+  apiKeyConfigured = aiStatus.backendConfigured;
   const aiBtn = document.getElementById('aiSuggestBtn');
   if (aiBtn) {
     if (apiKeyConfigured) {
@@ -706,7 +743,7 @@ async function initializeAI() {
       aiBtn.title = 'Get AI-powered rename suggestions';
     } else {
       aiBtn.disabled = true;
-      aiBtn.title = 'Configure API key in Settings first';
+      aiBtn.title = 'Backend server not configured';
     }
   }
 }
@@ -738,20 +775,11 @@ async function loadSettings() {
         stats.averageConfidence ? `${Math.round(stats.averageConfidence * 100)}%` : '0%';
     }
     
-    // Load API key for AI settings
-    const apiKey = await window.electronAPI.getApiKey();
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    if (apiKeyInput && apiKey) {
-      apiKeyInput.value = apiKey;
-    }
-    
     // Set confidence threshold
     updateConfidenceValue();
     
-    // Check if API key is configured and show prompt if not
-    if (!apiKey) {
-      showApiKeyPrompt();
-    }
+    // Test backend connection on load
+    await testBackendConnection();
   } catch (error) {
     console.error('Error loading settings:', error);
   }
@@ -791,106 +819,59 @@ async function saveSettings() {
   }
 }
 
-async function saveApiKey() {
-  const input = document.getElementById('apiKeyInput');
-  const key = input.value.trim();
+async function testBackendConnection() {
   const msgDiv = document.getElementById('settingsMessage');
   
-  if (!key) {
-    msgDiv.textContent = 'Please enter an API key';
-    msgDiv.style.color = 'red';
-    return;
-  }
-  
-  const result = await window.electronAPI.saveApiKey(key);
-  if (result.success) {
-    msgDiv.textContent = '✅ API key saved successfully!';
-    msgDiv.style.color = 'green';
-    apiKeyConfigured = true;
-    const aiBtn = document.getElementById('aiSuggestBtn');
-    if (aiBtn) {
-      aiBtn.disabled = false;
-    }
-    setTimeout(() => {
-      document.getElementById('settingsModal').style.display = 'none';
-    }, 1500);
-  } else {
-    msgDiv.textContent = `Error: ${result.error}`;
-    msgDiv.style.color = 'red';
-  }
-}
-
-async function testApiKey() {
-  const input = document.getElementById('apiKeyInput');
-  const key = input.value.trim();
-  const msgDiv = document.getElementById('settingsMessage');
-  
-  if (!key) {
-    msgDiv.textContent = 'Please enter an API key';
-    msgDiv.style.color = 'red';
-    return;
-  }
-  
-  msgDiv.textContent = 'Testing connection...';
+  msgDiv.textContent = 'Testing backend connection...';
   msgDiv.style.color = 'blue';
   
-  const result = await window.electronAPI.testApiKey(key);
-  if (result.success) {
-    msgDiv.textContent = '✅ Connection successful! API key is valid.';
-    msgDiv.style.color = 'green';
-  } else {
-    msgDiv.textContent = `❌ ${result.error}`;
+  try {
+    const result = await window.electronAPI.testBackendConnection();
+    if (result.success) {
+      msgDiv.textContent = '✅ Backend connection successful! AI services are ready.';
+      msgDiv.style.color = 'green';
+      apiKeyConfigured = true;
+      const aiBtn = document.getElementById('aiSuggestBtn');
+      if (aiBtn) {
+        aiBtn.disabled = false;
+        aiBtn.title = 'Get AI-powered rename suggestions';
+      }
+    } else {
+      msgDiv.textContent = `❌ Backend connection failed: ${result.error}`;
+      msgDiv.style.color = 'red';
+      apiKeyConfigured = false;
+      const aiBtn = document.getElementById('aiSuggestBtn');
+      if (aiBtn) {
+        aiBtn.disabled = true;
+        aiBtn.title = 'Backend server not available';
+      }
+    }
+  } catch (error) {
+    msgDiv.textContent = `❌ Backend connection error: ${error.message}`;
     msgDiv.style.color = 'red';
+    apiKeyConfigured = false;
+    const aiBtn = document.getElementById('aiSuggestBtn');
+    if (aiBtn) {
+      aiBtn.disabled = true;
+      aiBtn.title = 'Backend server not available';
+    }
   }
 }
 
-function showApiKeyPrompt() {
-  const prompt = document.createElement('div');
-  prompt.id = 'apiKeyPrompt';
-  prompt.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    z-index: 1000;
-    max-width: 300px;
-  `;
-  prompt.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <div>
-        <strong>Configure API Key</strong><br>
-        <small>Get AI-powered rename suggestions</small>
-      </div>
-      <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 18px; cursor: pointer;">&times;</button>
-    </div>
-    <button onclick="document.getElementById('settingsBtn').click()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-      Open Settings
-    </button>
-  `;
-  document.body.appendChild(prompt);
-  
-  // Auto-remove after 10 seconds
-  setTimeout(() => {
-    if (prompt.parentNode) {
-      prompt.remove();
-    }
-  }, 10000);
-}
+// Removed showApiKeyPrompt function - no longer needed with backend-managed API keys
 
 // AI Suggestion functionality
 async function handleAISuggest() {
   if (!currentFilePath) {
-    updateStatus('Please select a file first', 'error');
+    showErrorModal('No File Selected', 'Please select a file first before getting AI suggestions.', 'warning');
     return;
   }
   
   if (!apiKeyConfigured) {
-    updateStatus('Please configure your API key in Settings first', 'error');
-    document.getElementById('settingsBtn').click();
+    showErrorModal('Backend Not Available', 'Backend server not available. Please check Settings.', 'error', {
+      actionText: 'Open Settings',
+      actionCallback: () => document.getElementById('settingsBtn').click()
+    });
     return;
   }
   
@@ -898,34 +879,283 @@ async function handleAISuggest() {
   btn.disabled = true;
   btn.textContent = '⏳ Analyzing...';
   
+  // Show loading modal with progress simulation
+  showLoadingModal('Analyzing Document', 'Please wait while we analyze your document...', 0);
+  
+  // Simulate progress updates
+  const progressInterval = setInterval(() => {
+    const currentProgress = Math.min(90, Math.random() * 30 + 20); // Random progress between 20-90%
+    updateLoadingProgress(currentProgress, 'Processing document content...');
+  }, 500);
+  
   try {
     const result = await window.electronAPI.suggestRename(currentFilePath);
+    
+    // Complete progress and hide loading modal
+    clearInterval(progressInterval);
+    updateLoadingProgress(100, 'Analysis complete!');
+    setTimeout(() => {
+      hideLoadingModal();
+    }, 500);
     
     if (result.success) {
       if (result.suggestions && result.suggestions.length > 0) {
         showSuggestionsModal(result.suggestions, currentFilePath);
       } else {
-        updateStatus('No suggestions generated. Please try again.', 'error');
+        showErrorModal('No Suggestions', 'No suggestions generated. Please try again.', 'warning', {
+          canRetry: true,
+          retryCallback: () => handleAISuggest()
+        });
       }
     } else {
-      // Handle specific error cases
-      if (result.error.includes('Invalid API key')) {
-        updateStatus('Invalid API key. Please check your settings.', 'error');
-        document.getElementById('settingsBtn').click();
-      } else if (result.error.includes('Rate limit')) {
-        updateStatus('Rate limit exceeded. Please try again in a moment.', 'error');
-      } else if (result.error.includes('Network error')) {
-        updateStatus('Network error. Please check your internet connection.', 'error');
-      } else {
-        updateStatus(`Error: ${result.error}`, 'error');
-      }
+      // Handle specific error cases with enhanced error modal
+      handleAIError(result);
     }
   } catch (error) {
     console.error('Error getting AI suggestions:', error);
-    updateStatus(`Error: ${error.message}`, 'error');
+    clearInterval(progressInterval);
+    hideLoadingModal();
+    showErrorModal('Unexpected Error', `An unexpected error occurred: ${error.message}`, 'error', {
+      canRetry: true,
+      retryCallback: () => handleAISuggest()
+    });
   } finally {
     btn.disabled = false;
     btn.textContent = '✨ Get AI Suggestions';
+  }
+}
+
+// Enhanced error handling for AI suggestions
+function handleAIError(result) {
+  const { error, errorType, canRetry } = result;
+  
+  let title = 'AI Suggestion Error';
+  let message = error;
+  let type = 'error';
+  let actionOptions = {};
+  
+  switch (errorType) {
+    case 'configuration':
+      title = 'Configuration Error';
+      type = 'error';
+      actionOptions = {
+        actionText: 'Open Settings',
+        actionCallback: () => document.getElementById('settingsBtn').click()
+      };
+      break;
+      
+    case 'authentication':
+      title = 'Authentication Error';
+      type = 'error';
+      actionOptions = {
+        actionText: 'Check Settings',
+        actionCallback: () => document.getElementById('settingsBtn').click()
+      };
+      break;
+      
+    case 'rate_limit':
+      title = 'Rate Limit Exceeded';
+      type = 'warning';
+      actionOptions = {
+        canRetry: true,
+        retryCallback: () => handleAISuggest(),
+        retryDelay: 5000 // 5 second delay
+      };
+      break;
+      
+    case 'timeout':
+      title = 'Request Timeout';
+      type = 'warning';
+      actionOptions = {
+        canRetry: true,
+        retryCallback: () => handleAISuggest()
+      };
+      break;
+      
+    case 'network':
+      title = 'Network Error';
+      type = 'error';
+      actionOptions = {
+        canRetry: true,
+        retryCallback: () => handleAISuggest()
+      };
+      break;
+      
+    case 'extraction':
+      title = 'File Processing Error';
+      type = 'error';
+      actionOptions = {
+        canRetry: true,
+        retryCallback: () => handleAISuggest()
+      };
+      break;
+      
+    case 'content':
+      title = 'No Content Found';
+      type = 'warning';
+      actionOptions = {
+        canRetry: false
+      };
+      break;
+      
+    case 'server':
+      title = 'Server Error';
+      type = 'error';
+      actionOptions = {
+        canRetry: true,
+        retryCallback: () => handleAISuggest()
+      };
+      break;
+      
+    default:
+      if (canRetry) {
+        actionOptions = {
+          canRetry: true,
+          retryCallback: () => handleAISuggest()
+        };
+      }
+  }
+  
+  showErrorModal(title, message, type, actionOptions);
+}
+
+// Error Modal Functions
+function showErrorModal(title, message, type = 'error', options = {}) {
+  const modal = document.getElementById('errorModal');
+  const titleEl = document.getElementById('errorTitle');
+  const messageEl = document.getElementById('errorMessage');
+  const iconEl = document.getElementById('errorIcon');
+  const detailsEl = document.getElementById('errorDetails');
+  const technicalDetailsEl = document.getElementById('errorTechnicalDetails');
+  const actionBtn = document.getElementById('errorActionBtn');
+  const retryBtn = document.getElementById('errorRetryBtn');
+  const closeBtn = document.getElementById('errorCloseBtn');
+  
+  // Set content
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  
+  // Set icon based on type
+  const icons = {
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️',
+    success: '✅'
+  };
+  iconEl.textContent = icons[type] || icons.error;
+  
+  // Set modal class for styling
+  modal.className = `modal error-modal error-type-${type}`;
+  
+  // Show/hide technical details
+  if (options.technicalDetails) {
+    detailsEl.style.display = 'block';
+    technicalDetailsEl.textContent = options.technicalDetails;
+  } else {
+    detailsEl.style.display = 'none';
+  }
+  
+  // Configure action button
+  if (options.actionText && options.actionCallback) {
+    actionBtn.textContent = options.actionText;
+    actionBtn.style.display = 'inline-block';
+    actionBtn.onclick = () => {
+      options.actionCallback();
+      hideErrorModal();
+    };
+  } else {
+    actionBtn.style.display = 'none';
+  }
+  
+  // Configure retry button
+  if (options.canRetry && options.retryCallback) {
+    retryBtn.style.display = 'inline-block';
+    retryBtn.onclick = () => {
+      if (options.retryDelay) {
+        retryBtn.disabled = true;
+        retryBtn.textContent = `Retrying in ${options.retryDelay / 1000}s...`;
+        setTimeout(() => {
+          retryBtn.disabled = false;
+          retryBtn.textContent = 'Retry';
+          options.retryCallback();
+          hideErrorModal();
+        }, options.retryDelay);
+      } else {
+        options.retryCallback();
+        hideErrorModal();
+      }
+    };
+  } else {
+    retryBtn.style.display = 'none';
+  }
+  
+  // Configure close button
+  closeBtn.onclick = hideErrorModal;
+  
+  // Show modal
+  modal.style.display = 'block';
+  
+  // Auto-hide if specified
+  if (options.autoHide) {
+    setTimeout(() => {
+      hideErrorModal();
+    }, options.autoHide);
+  }
+}
+
+function hideErrorModal() {
+  const modal = document.getElementById('errorModal');
+  modal.style.display = 'none';
+}
+
+// Loading Modal Functions
+function showLoadingModal(title = 'Processing...', message = 'Please wait while we process your request', progress = 0) {
+  const modal = document.getElementById('loadingModal');
+  const titleEl = document.getElementById('loadingTitle');
+  const messageEl = document.getElementById('loadingMessage');
+  const progressEl = document.getElementById('loadingProgress');
+  const progressFillEl = document.querySelector('.progress-fill');
+  
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  progressEl.textContent = `${Math.round(progress)}%`;
+  progressFillEl.style.width = `${progress}%`;
+  
+  modal.style.display = 'block';
+}
+
+function updateLoadingProgress(progress, message = null) {
+  const progressEl = document.getElementById('loadingProgress');
+  const progressFillEl = document.querySelector('.progress-fill');
+  const messageEl = document.getElementById('loadingMessage');
+  
+  progressEl.textContent = `${Math.round(progress)}%`;
+  progressFillEl.style.width = `${progress}%`;
+  
+  if (message) {
+    messageEl.textContent = message;
+  }
+}
+
+function hideLoadingModal() {
+  const modal = document.getElementById('loadingModal');
+  modal.style.display = 'none';
+}
+
+// Enhanced status update function
+function updateStatus(message, type = 'info') {
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = message;
+  statusEl.className = `status ${type}`;
+  
+  // Auto-hide success messages after 3 seconds
+  if (type === 'success') {
+    setTimeout(() => {
+      if (statusEl.textContent === message) {
+        statusEl.textContent = '';
+        statusEl.className = 'status';
+      }
+    }, 3000);
   }
 }
 
