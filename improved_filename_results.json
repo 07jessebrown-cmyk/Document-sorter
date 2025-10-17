@@ -1,0 +1,836 @@
+[
+  {
+    "original_filename": "Contract_Company1_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company1_2024-02-18.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:28.295Z",
+    "success": false,
+    "error": "Text extraction failed: PDF processing failed: bad XRef entry"
+  },
+  {
+    "original_filename": "Contract_Company2_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company2_2024-02-18.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:28.400Z",
+    "success": false,
+    "error": "Text extraction failed: PDF processing failed: bad XRef entry"
+  },
+  {
+    "original_filename": "Contract_Company3_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company3_2024-02-18.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:28.504Z",
+    "success": false,
+    "error": "Text extraction failed: PDF processing failed: bad XRef entry"
+  },
+  {
+    "original_filename": "Contract_Company4_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company4_2024-02-18.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:28.607Z",
+    "success": false,
+    "error": "Text extraction failed: PDF processing failed: bad XRef entry"
+  },
+  {
+    "original_filename": "Contract_Company5_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company5_2024-02-18.pdf",
+    "old_filename": "ServiceNow_Inc._Contract_LowConfidence_2024-01-15_[40%].pdf",
+    "new_filename": "Contract_ServiceNow_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Contract",
+      "clientName": "ServiceNow Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.4
+    },
+    "improvement": {
+      "old_length": 59,
+      "new_length": 39,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:28.726Z",
+    "success": true
+  },
+  {
+    "original_filename": "Contract_Company6_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company6_2024-02-18.pdf",
+    "old_filename": "ServiceNow_Inc._Contract_LowConfidence_2024-01-15_[40%].pdf",
+    "new_filename": "Contract_ServiceNow_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Contract",
+      "clientName": "ServiceNow Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.4
+    },
+    "improvement": {
+      "old_length": 59,
+      "new_length": 39,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:28.834Z",
+    "success": true
+  },
+  {
+    "original_filename": "Contract_Company7_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company7_2024-02-18.pdf",
+    "old_filename": "ServiceNow_Inc._Contract_LowConfidence_2024-01-15_[40%].pdf",
+    "new_filename": "Contract_ServiceNow_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Contract",
+      "clientName": "ServiceNow Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.4
+    },
+    "improvement": {
+      "old_length": 59,
+      "new_length": 39,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:28.939Z",
+    "success": true
+  },
+  {
+    "original_filename": "Contract_Company8_2024-02-18.pdf",
+    "file_path": "baseline_test_docs/Contract_Company8_2024-02-18.pdf",
+    "old_filename": "ServiceNow_Inc._Contract_LowConfidence_2024-01-15_[40%].pdf",
+    "new_filename": "Contract_ServiceNow_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Contract",
+      "clientName": "ServiceNow Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.4
+    },
+    "improvement": {
+      "old_length": 59,
+      "new_length": 39,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:29.044Z",
+    "success": true
+  },
+  {
+    "original_filename": "Document.pdf",
+    "file_path": "baseline_test_docs/Document.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:29.150Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "Documento_Empresa1_2024-03-11.pdf",
+    "file_path": "baseline_test_docs/Documento_Empresa1_2024-03-11.pdf",
+    "old_filename": "Acme_Corporation_Unclassified_LowConfidence_[0%].pdf",
+    "new_filename": "Unclassified_Acme_Corporation_UnknownDate.pdf",
+    "analysis_result": {
+      "type": "Unclassified",
+      "clientName": "Acme Corporation",
+      "confidence": 0
+    },
+    "improvement": {
+      "old_length": 52,
+      "new_length": 45,
+      "length_improvement": 7,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:29.268Z",
+    "success": true
+  },
+  {
+    "original_filename": "Documento_Empresa2_2024-03-11.pdf",
+    "file_path": "baseline_test_docs/Documento_Empresa2_2024-03-11.pdf",
+    "old_filename": "Acme_Corporation_Unclassified_LowConfidence_[0%].pdf",
+    "new_filename": "Unclassified_Acme_Corporation_UnknownDate.pdf",
+    "analysis_result": {
+      "type": "Unclassified",
+      "clientName": "Acme Corporation",
+      "confidence": 0
+    },
+    "improvement": {
+      "old_length": 52,
+      "new_length": 45,
+      "length_improvement": 7,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:29.375Z",
+    "success": true
+  },
+  {
+    "original_filename": "Documento_Empresa3_2024-03-11.pdf",
+    "file_path": "baseline_test_docs/Documento_Empresa3_2024-03-11.pdf",
+    "old_filename": "Acme_Corporation_Unclassified_LowConfidence_[0%].pdf",
+    "new_filename": "Unclassified_Acme_Corporation_UnknownDate.pdf",
+    "analysis_result": {
+      "type": "Unclassified",
+      "clientName": "Acme Corporation",
+      "confidence": 0
+    },
+    "improvement": {
+      "old_length": 52,
+      "new_length": 45,
+      "length_improvement": 7,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:29.481Z",
+    "success": true
+  },
+  {
+    "original_filename": "Documento_Empresa4_2024-03-11.pdf",
+    "file_path": "baseline_test_docs/Documento_Empresa4_2024-03-11.pdf",
+    "old_filename": "Acme_Corporation_Unclassified_LowConfidence_[0%].pdf",
+    "new_filename": "Unclassified_Acme_Corporation_UnknownDate.pdf",
+    "analysis_result": {
+      "type": "Unclassified",
+      "clientName": "Acme Corporation",
+      "confidence": 0
+    },
+    "improvement": {
+      "old_length": 52,
+      "new_length": 45,
+      "length_improvement": 7,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:29.590Z",
+    "success": true
+  },
+  {
+    "original_filename": "Documento_Empresa5_2024-03-11.pdf",
+    "file_path": "baseline_test_docs/Documento_Empresa5_2024-03-11.pdf",
+    "old_filename": "Acme_Corporation_Unclassified_LowConfidence_[0%].pdf",
+    "new_filename": "Unclassified_Acme_Corporation_UnknownDate.pdf",
+    "analysis_result": {
+      "type": "Unclassified",
+      "clientName": "Acme Corporation",
+      "confidence": 0
+    },
+    "improvement": {
+      "old_length": 52,
+      "new_length": 45,
+      "length_improvement": 7,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:29.696Z",
+    "success": true
+  },
+  {
+    "original_filename": "IMG_2024.pdf",
+    "file_path": "baseline_test_docs/IMG_2024.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:29.800Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "Invoice_Client10_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client10_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:29.905Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client1_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client1_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.009Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client2_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client2_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.113Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client3_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client3_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.216Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client4_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client4_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.321Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client5_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client5_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.424Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client6_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client6_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.528Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client7_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client7_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.632Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client8_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client8_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.736Z",
+    "success": true
+  },
+  {
+    "original_filename": "Invoice_Client9_2024-12-04.pdf",
+    "file_path": "baseline_test_docs/Invoice_Client9_2024-12-04.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:30.840Z",
+    "success": true
+  },
+  {
+    "original_filename": "Notes_Person1_2024-11-19.pdf",
+    "file_path": "baseline_test_docs/Notes_Person1_2024-11-19.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:30.943Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "Notes_Person2_2024-11-19.pdf",
+    "file_path": "baseline_test_docs/Notes_Person2_2024-11-19.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:31.046Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "Notes_Person3_2024-11-19.pdf",
+    "file_path": "baseline_test_docs/Notes_Person3_2024-11-19.pdf",
+    "old_filename": "Budget_approval_pending_-_Next_meeting_scheduled_for_next_week_Action_Proposal_LowConfidence_2024-01-15_[10%].pdf",
+    "new_filename": "Proposal_Budget_approval_pending_-_Next_2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Proposal",
+      "clientName": "Budget approval pending - Next meeting scheduled for next week Action",
+      "date": "2024-01-15",
+      "confidence": 0.1
+    },
+    "improvement": {
+      "old_length": 113,
+      "new_length": 54,
+      "length_improvement": 59,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:31.149Z",
+    "success": true
+  },
+  {
+    "original_filename": "Notes_Person4_2024-11-19.pdf",
+    "file_path": "baseline_test_docs/Notes_Person4_2024-11-19.pdf",
+    "old_filename": "Budget_approval_pending_-_Next_meeting_scheduled_for_next_week_Action_Proposal_LowConfidence_2024-01-15_[10%].pdf",
+    "new_filename": "Proposal_Budget_approval_pending_-_Next_2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Proposal",
+      "clientName": "Budget approval pending - Next meeting scheduled for next week Action",
+      "date": "2024-01-15",
+      "confidence": 0.1
+    },
+    "improvement": {
+      "old_length": 113,
+      "new_length": 54,
+      "length_improvement": 59,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:31.253Z",
+    "success": true
+  },
+  {
+    "original_filename": "Report_Org1_2024-01-25.pdf",
+    "file_path": "baseline_test_docs/Report_Org1_2024-01-25.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:31.356Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "Report_Org2_2024-01-25.pdf",
+    "file_path": "baseline_test_docs/Report_Org2_2024-01-25.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:31.460Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "Report_Org3_2024-01-25.pdf",
+    "file_path": "baseline_test_docs/Report_Org3_2024-01-25.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:31.563Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "Report_Org4_2024-01-25.pdf",
+    "file_path": "baseline_test_docs/Report_Org4_2024-01-25.pdf",
+    "old_filename": "Marketo_Inc._Report_LowConfidence_2024-01-15_[10%].pdf",
+    "new_filename": "Report_Marketo_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Report",
+      "clientName": "Marketo Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.1
+    },
+    "improvement": {
+      "old_length": 54,
+      "new_length": 34,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:31.674Z",
+    "success": true
+  },
+  {
+    "original_filename": "Report_Org5_2024-01-25.pdf",
+    "file_path": "baseline_test_docs/Report_Org5_2024-01-25.pdf",
+    "old_filename": "Marketo_Inc._Report_LowConfidence_2024-01-15_[10%].pdf",
+    "new_filename": "Report_Marketo_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Report",
+      "clientName": "Marketo Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.1
+    },
+    "improvement": {
+      "old_length": 54,
+      "new_length": 34,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:31.781Z",
+    "success": true
+  },
+  {
+    "original_filename": "Report_Org6_2024-01-25.pdf",
+    "file_path": "baseline_test_docs/Report_Org6_2024-01-25.pdf",
+    "old_filename": "Marketo_Inc._Report_LowConfidence_2024-01-15_[10%].pdf",
+    "new_filename": "Report_Marketo_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Report",
+      "clientName": "Marketo Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.1
+    },
+    "improvement": {
+      "old_length": 54,
+      "new_length": 34,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:31.887Z",
+    "success": true
+  },
+  {
+    "original_filename": "agreement_v2.pdf",
+    "file_path": "baseline_test_docs/agreement_v2.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:31.990Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "analysis.pdf",
+    "file_path": "baseline_test_docs/analysis.pdf",
+    "old_filename": "Marketo_Inc._Report_LowConfidence_2024-01-15_[10%].pdf",
+    "new_filename": "Report_Marketo_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Report",
+      "clientName": "Marketo Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.1
+    },
+    "improvement": {
+      "old_length": 54,
+      "new_length": 34,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:32.099Z",
+    "success": true
+  },
+  {
+    "original_filename": "contract_draft.pdf",
+    "file_path": "baseline_test_docs/contract_draft.pdf",
+    "old_filename": "ServiceNow_Inc._Contract_LowConfidence_2024-01-15_[40%].pdf",
+    "new_filename": "Contract_ServiceNow_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Contract",
+      "clientName": "ServiceNow Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.4
+    },
+    "improvement": {
+      "old_length": 59,
+      "new_length": 39,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:32.204Z",
+    "success": true
+  },
+  {
+    "original_filename": "data.pdf",
+    "file_path": "baseline_test_docs/data.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:32.307Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "file.pdf",
+    "file_path": "baseline_test_docs/file.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:32.411Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "handwriting-notes.pdf",
+    "file_path": "baseline_test_docs/handwriting-notes.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:32.514Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "legal_doc.pdf",
+    "file_path": "baseline_test_docs/legal_doc.pdf",
+    "old_filename": "ServiceNow_Inc._Contract_LowConfidence_2024-01-15_[40%].pdf",
+    "new_filename": "Contract_ServiceNow_Inc._2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Contract",
+      "clientName": "ServiceNow Inc.",
+      "date": "2024-01-15",
+      "confidence": 0.4
+    },
+    "improvement": {
+      "old_length": 59,
+      "new_length": 39,
+      "length_improvement": 20,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:32.619Z",
+    "success": true
+  },
+  {
+    "original_filename": "multilingual-spanish.pdf",
+    "file_path": "baseline_test_docs/multilingual-spanish.pdf",
+    "old_filename": "Acme_Corporation_Unclassified_LowConfidence_[0%].pdf",
+    "new_filename": "Unclassified_Acme_Corporation_UnknownDate.pdf",
+    "analysis_result": {
+      "type": "Unclassified",
+      "clientName": "Acme Corporation",
+      "confidence": 0
+    },
+    "improvement": {
+      "old_length": 52,
+      "new_length": 45,
+      "length_improvement": 7,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:32.723Z",
+    "success": true
+  },
+  {
+    "original_filename": "report_final.pdf",
+    "file_path": "baseline_test_docs/report_final.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:32.827Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "scan.pdf",
+    "file_path": "baseline_test_docs/scan.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:32.929Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "signature-contract.pdf",
+    "file_path": "baseline_test_docs/signature-contract.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:33.032Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "summary.pdf",
+    "file_path": "baseline_test_docs/summary.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:33.135Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "table-invoice.pdf",
+    "file_path": "baseline_test_docs/table-invoice.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:33.238Z",
+    "success": true
+  },
+  {
+    "original_filename": "terms.pdf",
+    "file_path": "baseline_test_docs/terms.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:33.341Z",
+    "success": false,
+    "error": "No text extracted from file"
+  },
+  {
+    "original_filename": "untitled.pdf",
+    "file_path": "baseline_test_docs/untitled.pdf",
+    "old_filename": "Acme_Corporation_123_Business_St_City,_State_12345_DescriptionQuantityUnit_Invoice_LowConfidence_2024-01-15_[20%].pdf",
+    "new_filename": "Invoice_Acme_Corporation_123_Business__2024-01-15.pdf",
+    "analysis_result": {
+      "type": "Invoice",
+      "clientName": "Acme Corporation 123 Business St City, State 12345 DescriptionQuantityUnit",
+      "date": "2024-01-15",
+      "confidence": 0.2
+    },
+    "improvement": {
+      "old_length": 117,
+      "new_length": 53,
+      "length_improvement": 64,
+      "is_shorter": true,
+      "is_cleaner": true
+    },
+    "processing_timestamp": "2025-10-16T17:17:33.444Z",
+    "success": true
+  },
+  {
+    "original_filename": "watermark-confidential.pdf",
+    "file_path": "baseline_test_docs/watermark-confidential.pdf",
+    "old_filename": "ERROR",
+    "new_filename": "ERROR",
+    "analysis_result": null,
+    "processing_timestamp": "2025-10-16T17:17:33.546Z",
+    "success": false,
+    "error": "No text extracted from file"
+  }
+]

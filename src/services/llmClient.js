@@ -1,5 +1,6 @@
 const https = require('https');
 const { URL } = require('url');
+const ConfigService = require('./configService');
 
 /**
  * Semaphore class for concurrency control
@@ -39,13 +40,20 @@ class Semaphore {
 
 class LLMClient {
   constructor(options = {}) {
+    // Initialize config service
+    this.configService = new ConfigService();
+    this.configService.loadConfig();
+    
+    // Get AI configuration
+    const aiConfig = this.configService.getAIConfig();
+    
     this.apiKey = process.env.OPENAI_API_KEY || process.env.AI_API_KEY || options.apiKey;
     this.baseURL = options.baseURL || 'https://api.openai.com/v1';
-    this.defaultModel = options.defaultModel || 'gpt-3.5-turbo';
-    this.maxRetries = options.maxRetries || 3;
-    this.retryDelay = options.retryDelay || 1000; // Base delay in ms
-    this.maxDelay = options.maxDelay || 10000; // Max delay in ms
-    this.timeout = options.timeout || 30000; // Request timeout in ms
+    this.defaultModel = options.defaultModel || 'gpt-4-turbo';
+    this.maxRetries = options.maxRetries || aiConfig.maxRetries || 3;
+    this.retryDelay = options.retryDelay || aiConfig.retryDelay || 1000; // Base delay in ms
+    this.maxDelay = options.maxDelay || aiConfig.maxDelay || 10000; // Max delay in ms
+    this.timeout = options.timeout || aiConfig.timeout || 30000; // Request timeout in ms
     
     // Concurrency control
     this.maxConcurrentRequests = options.maxConcurrentRequests || 3;
@@ -89,8 +97,8 @@ class LLMClient {
     const {
       model = this.defaultModel,
       messages,
-      maxTokens = 500,
-      temperature = 0.1,
+      maxTokens = 350, // Updated default
+      temperature = 0.5, // Updated default for better creativity
       topP = 1,
       frequencyPenalty = 0,
       presencePenalty = 0,

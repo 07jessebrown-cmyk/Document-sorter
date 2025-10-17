@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const ConfigService = require('./configService');
+const { buildEnhancedContext } = require('./ai_prompts');
 
 /**
  * AI Text Service for Document Metadata Extraction
@@ -10,10 +12,27 @@ const crypto = require('crypto');
 
 class AITextService {
   constructor() {
-    this.isEnabled = process.env.USE_AI === 'true' || process.env.NODE_ENV === 'test';
-    this.model = process.env.AI_MODEL || 'gpt-3.5-turbo';
-    this.confidenceThreshold = parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) || 0.5;
-    this.batchSize = parseInt(process.env.AI_BATCH_SIZE) || 5;
+    // Initialize config service
+    this.configService = new ConfigService();
+    this.configService.loadConfig();
+    
+    // Get AI configuration
+    const aiConfig = this.configService.getAIConfig();
+    const metadataConfig = this.configService.getMetadataExtractionConfig();
+    const qualityLoggingConfig = this.configService.getQualityLoggingConfig();
+    const contextEnhancementConfig = this.configService.getContextEnhancementConfig();
+    
+    this.isEnabled = process.env.USE_AI === 'true' || process.env.NODE_ENV === 'test' || aiConfig.enabled;
+    this.model = metadataConfig.model;
+    this.temperature = metadataConfig.temperature;
+    this.maxTokens = metadataConfig.maxTokens;
+    this.timeout = metadataConfig.timeout;
+    this.confidenceThreshold = aiConfig.confidenceThreshold;
+    this.batchSize = aiConfig.batchSize;
+    
+    // Quality logging configuration
+    this.qualityLogging = qualityLoggingConfig;
+    this.contextEnhancement = contextEnhancementConfig;
     
     // Initialize LLM client (will be injected or created)
     this.llmClient = null;
@@ -353,11 +372,24 @@ class AITextService {
   async callAIService(text, options = {}) {
     const maxRetries = 3;
     const baseDelay = 1000; // 1 second base delay
+    const startTime = Date.now();
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         // Build the prompt for metadata extraction
         const prompt = this.buildMetadataPrompt(text, options);
+        
+        // Log request if quality logging is enabled
+        if (this.qualityLogging.enabled) {
+          this.logAIRequest({
+            model: this.model,
+            temperature: this.temperature,
+            maxTokens: this.maxTokens,
+            textLength: text.length,
+            attempt: attempt,
+            timestamp: new Date().toISOString()
+          });
+        }
         
         // Call the LLM client
         const response = await this.llmClient.callLLM({
@@ -372,8 +404,8 @@ class AITextService {
               content: prompt
             }
           ],
-          maxTokens: 500,
-          temperature: 0.1
+          maxTokens: this.maxTokens,
+          temperature: this.temperature
         });
 
         if (!response || !response.content) {
@@ -406,6 +438,23 @@ class AITextService {
           continue;
         }
 
+        // Log response if quality logging is enabled
+        if (this.qualityLogging.enabled) {
+          const latency = Date.now() - startTime;
+          this.logAIResponse({
+            model: this.model,
+            temperature: this.temperature,
+            maxTokens: this.maxTokens,
+            responseLength: response.content ? response.content.length : 0,
+            latencyMs: latency,
+            success: true,
+            attempt: attempt,
+            timestamp: new Date().toISOString(),
+            responseSample: this.qualityLogging.logRequestResponse ? 
+              response.content.substring(0, this.qualityLogging.maxResponseLength) : null
+          });
+        }
+
         // Success - return the result
         return result;
 
@@ -432,16 +481,20 @@ class AITextService {
    * @private
    */
   buildMetadataPrompt(text, options = {}) {
-    // Use the imported prompt function
+    // Use the imported prompt function with enhanced context
     const { buildMetadataPrompt: buildPrompt } = require('./ai_prompts');
     const promptData = buildPrompt(text, {
       model: this.model,
       includeExamples: true,
-      maxTokens: 500,
+      maxTokens: this.maxTokens,
       detectedLanguage: options.detectedLanguage,
       languageName: options.languageName,
       hasTableData: options.hasTableData || false,
-      tableContext: options.tableContext || null
+      tableContext: options.tableContext || null,
+      fileMetadata: options.fileMetadata || null,
+      preExtractedEntities: options.preExtractedEntities || null,
+      contextEnhancement: this.contextEnhancement,
+      maxTextLength: this.contextEnhancement.maxTextLength
     });
     
     // Return the user message content
@@ -745,6 +798,72 @@ class AITextService {
     this.telemetry = null;
     
     console.log('🔒 AI Text Service closed');
+  }
+
+  /**
+   * Log AI request for quality monitoring
+   * @param {Object} requestData - Request data to log
+   * @private
+   */
+  logAIRequest(requestData) {
+    if (!this.qualityLogging.enabled) return;
+    
+    const logEntry = {
+      type: 'ai_request',
+      ...requestData
+    };
+    
+    console.log(`[AI_REQUEST] ${JSON.stringify(logEntry)}`);
+    
+    // Also log to telemetry if available
+    if (this.telemetry && this.telemetry.trackAICalls) {
+      try {
+        this.telemetry.trackAICall({
+          type: 'request',
+          model: requestData.model,
+          temperature: requestData.temperature,
+          maxTokens: requestData.maxTokens,
+          textLength: requestData.textLength,
+          attempt: requestData.attempt
+        });
+      } catch (error) {
+        console.warn('Failed to track AI request in telemetry:', error.message);
+      }
+    }
+  }
+
+  /**
+   * Log AI response for quality monitoring
+   * @param {Object} responseData - Response data to log
+   * @private
+   */
+  logAIResponse(responseData) {
+    if (!this.qualityLogging.enabled) return;
+    
+    const logEntry = {
+      type: 'ai_response',
+      ...responseData
+    };
+    
+    console.log(`[AI_RESPONSE] ${JSON.stringify(logEntry)}`);
+    
+    // Also log to telemetry if available
+    if (this.telemetry && this.telemetry.trackAICalls) {
+      try {
+        this.telemetry.trackAICall({
+          type: 'response',
+          model: responseData.model,
+          temperature: responseData.temperature,
+          maxTokens: responseData.maxTokens,
+          responseLength: responseData.responseLength,
+          latencyMs: responseData.latencyMs,
+          success: responseData.success,
+          attempt: responseData.attempt
+        });
+      } catch (error) {
+        console.warn('Failed to track AI response in telemetry:', error.message);
+      }
+    }
   }
 
   /**

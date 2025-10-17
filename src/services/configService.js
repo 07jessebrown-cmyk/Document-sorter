@@ -43,13 +43,31 @@ class ConfigService {
     return {
       ai: {
         enabled: false,
-        model: "gpt-3.5-turbo",
         confidenceThreshold: 0.5,
         batchSize: 5,
         maxRetries: 3,
         retryDelay: 1000,
         maxDelay: 10000,
-        timeout: 30000
+        timeout: 30000,
+        filenameGeneration: {
+          model: "gpt-4-turbo",
+          temperature: 0.5,
+          maxTokens: 300,
+          timeout: 30000
+        },
+        metadataExtraction: {
+          model: "gpt-4-turbo", 
+          temperature: 0.25,
+          maxTokens: 250,
+          timeout: 30000
+        },
+        qualityLogging: {
+          enabled: true,
+          logLevel: "info",
+          logRequestResponse: true,
+          logPerformance: true,
+          maxResponseLength: 500
+        }
       },
       cache: {
         enabled: true,
@@ -208,7 +226,6 @@ class ConfigService {
   getAIConfig() {
     return {
       enabled: this.get('ai.enabled', false),
-      model: this.get('ai.model', 'gpt-3.5-turbo'),
       confidenceThreshold: this.get('ai.confidenceThreshold', 0.5),
       batchSize: this.get('ai.batchSize', 5),
       maxRetries: this.get('ai.maxRetries', 3),
@@ -216,6 +233,121 @@ class ConfigService {
       maxDelay: this.get('ai.maxDelay', 10000),
       timeout: this.get('ai.timeout', 30000)
     };
+  }
+
+  /**
+   * Get filename generation AI configuration
+   * @returns {Object} Filename generation AI configuration
+   */
+  getFilenameGenerationConfig() {
+    return {
+      model: this.get('ai.filenameGeneration.model', 'gpt-4-turbo'),
+      temperature: this.get('ai.filenameGeneration.temperature', 0.5),
+      maxTokens: this.get('ai.filenameGeneration.maxTokens', 300),
+      timeout: this.get('ai.filenameGeneration.timeout', 30000)
+    };
+  }
+
+  /**
+   * Get metadata extraction AI configuration
+   * @returns {Object} Metadata extraction AI configuration
+   */
+  getMetadataExtractionConfig() {
+    return {
+      model: this.get('ai.metadataExtraction.model', 'gpt-4-turbo'),
+      temperature: this.get('ai.metadataExtraction.temperature', 0.25),
+      maxTokens: this.get('ai.metadataExtraction.maxTokens', 250),
+      timeout: this.get('ai.metadataExtraction.timeout', 30000)
+    };
+  }
+
+  /**
+   * Get quality logging configuration
+   * @returns {Object} Quality logging configuration
+   */
+  getQualityLoggingConfig() {
+    return {
+      enabled: this.get('ai.qualityLogging.enabled', true),
+      logLevel: this.get('ai.qualityLogging.logLevel', 'info'),
+      logRequestResponse: this.get('ai.qualityLogging.logRequestResponse', true),
+      logPerformance: this.get('ai.qualityLogging.logPerformance', true),
+      maxResponseLength: this.get('ai.qualityLogging.maxResponseLength', 500)
+    };
+  }
+
+  /**
+   * Get context enhancement configuration
+   * @returns {Object} Context enhancement configuration
+   */
+  getContextEnhancementConfig() {
+    return {
+      maxTextLength: this.get('ai.contextEnhancement.maxTextLength', 6000),
+      includeFileMetadata: this.get('ai.contextEnhancement.includeFileMetadata', true),
+      includePreExtractedEntities: this.get('ai.contextEnhancement.includePreExtractedEntities', true),
+      metadataFields: this.get('ai.contextEnhancement.metadataFields', ['created', 'modified', 'size', 'name', 'mimeType']),
+      entityFields: this.get('ai.contextEnhancement.entityFields', ['docType', 'clientName', 'date', 'amount'])
+    };
+  }
+
+  /**
+   * Get prompt versioning configuration
+   * @returns {Object} Prompt versioning configuration
+   */
+  getPromptVersioningConfig() {
+    return {
+      filenameGeneration: this.get('ai.promptVersioning.filenameGeneration', {
+        version: 'v1.6.1',
+        templatePath: 'prompts/filename_v1.6.1.txt',
+        description: 'Enhanced filename generation with context improvements',
+        created: '2025-10-17',
+        parameters: {
+          model: 'gpt-4-turbo',
+          temperature: 0.5,
+          maxTokens: 300
+        }
+      }),
+      metadataExtraction: this.get('ai.promptVersioning.metadataExtraction', {
+        version: 'v1.6.1',
+        templatePath: 'prompts/metadata_v1.6.1.txt',
+        description: 'Enhanced metadata extraction with context improvements',
+        created: '2025-10-17',
+        parameters: {
+          model: 'gpt-4-turbo',
+          temperature: 0.25,
+          maxTokens: 250
+        }
+      })
+    };
+  }
+
+  /**
+   * Get current prompt version for a specific type
+   * @param {string} type - Prompt type ('filenameGeneration' or 'metadataExtraction')
+   * @returns {Object} Current prompt version info
+   */
+  getCurrentPromptVersion(type) {
+    const versioning = this.getPromptVersioningConfig();
+    return versioning[type] || null;
+  }
+
+  /**
+   * Update prompt version
+   * @param {string} type - Prompt type
+   * @param {Object} versionInfo - New version information
+   */
+  updatePromptVersion(type, versionInfo) {
+    const currentConfig = this.config;
+    if (!currentConfig.ai) currentConfig.ai = {};
+    if (!currentConfig.ai.promptVersioning) currentConfig.ai.promptVersioning = {};
+    if (!currentConfig.ai.promptVersioning[type]) currentConfig.ai.promptVersioning[type] = {};
+    
+    currentConfig.ai.promptVersioning[type] = {
+      ...currentConfig.ai.promptVersioning[type],
+      ...versionInfo,
+      updated: new Date().toISOString()
+    };
+    
+    this.saveConfig();
   }
 
   /**

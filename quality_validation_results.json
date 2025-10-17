@@ -1,0 +1,1467 @@
+{
+  "timestamp": "2025-10-17T18:30:30.029Z",
+  "summary": {
+    "totalSuggestions": 51,
+    "averageOverall": "3.00",
+    "averageMetrics": {
+      "accuracy": 0.5,
+      "format": 0.7,
+      "length": 0.19999999999999993,
+      "creativity": 0.7999999999999997,
+      "completeness": 0.39999999999999986
+    },
+    "distribution": {
+      "excellent": 0,
+      "good": 0,
+      "mediocre": 51,
+      "bad": 0,
+      "terrible": 0
+    },
+    "successRate": "0.0%"
+  },
+  "recommendations": [
+    "Improve entity extraction accuracy",
+    "Optimize filename length constraints",
+    "Ensure all required elements are included"
+  ],
+  "individualRatings": [
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company1_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.025Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company2_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company3_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company4_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company5_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company6_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company7_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Contract_Company8_2024-02-18.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Document.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Documento_Empresa1_2024-03-11.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Documento_Empresa2_2024-03-11.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Documento_Empresa3_2024-03-11.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Documento_Empresa4_2024-03-11.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Documento_Empresa5_2024-03-11.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "IMG_2024.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client10_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client1_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client2_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client3_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client4_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client5_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client6_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client7_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client8_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Invoice_Client9_2024-12-04.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Notes_Person1_2024-11-19.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Notes_Person2_2024-11-19.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Notes_Person3_2024-11-19.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Notes_Person4_2024-11-19.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Report_Org1_2024-01-25.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Report_Org2_2024-01-25.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Report_Org3_2024-01-25.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.027Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Report_Org4_2024-01-25.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Report_Org5_2024-01-25.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "Report_Org6_2024-01-25.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "agreement_v2.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "analysis.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "contract_draft.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "data.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "file.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "handwriting-notes.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "legal_doc.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "multilingual-spanish.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "report_final.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "scan.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "signature-contract.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "summary.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "table-invoice.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "terms.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "untitled.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    },
+    {
+      "overall": 3,
+      "humanRating": null,
+      "automatedMetrics": {
+        "accuracy": 0.5,
+        "format": 0.7,
+        "length": 0.2,
+        "creativity": 0.8,
+        "completeness": 0.4
+      },
+      "issues": [
+        "Filename too short",
+        "Incomplete information"
+      ],
+      "strengths": [
+        "Creative naming"
+      ],
+      "recommendations": [
+        "Include more descriptive elements",
+        "Include date, document type, and key identifier"
+      ],
+      "metadata": {
+        "originalFilename": "watermark-confidential.pdf",
+        "suggestedFilename": "ERROR",
+        "textLength": 11,
+        "timestamp": "2025-10-17T18:30:30.028Z"
+      }
+    }
+  ],
+  "qualityGates": {
+    "phase1Goal": true,
+    "phase2Goal": false,
+    "successRateGoal": false
+  },
+  "improvements": {
+    "previousSuccessRate": "58.8",
+    "enhancedSuccessRate": "0.0%",
+    "improvement": -58.8
+  }
+}

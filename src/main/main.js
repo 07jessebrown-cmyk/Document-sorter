@@ -8,9 +8,12 @@ const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
 const os = require('os');
+const crypto = require('crypto');
 
 // Import AI services
 const aiService = require('../services/aiService');
+const QualityLogger = require('../services/qualityLogger');
+const FilenameGenerator = require('../services/filenameGenerator');
 
 // Enable full logging for debugging
 process.env.ELECTRON_ENABLE_LOGGING = '1';
@@ -254,6 +257,9 @@ async function initializeImageProcessor() {
 // Keep a global reference of the window object
 let mainWindow;
 let enhancedParsingService;
+
+// Analysis cache for performance
+const analysisCache = new Map();
 
 async function createWindow() {
   try {
@@ -757,12 +763,133 @@ async function analyzeFileOnly(filePath) {
       await errorLogger.logInfo('Basic analysis completed');
     }
 
+    // 3) Log AI suggestion for quality tracking
+    try {
+      const documentId = await QualityLogger.hashFile(filePath);
+      const fileStats = await fsp.stat(filePath);
+      
+      await QualityLogger.logSuggestion({
+        documentId: documentId,
+        filePath: filePath,
+        fileName: path.basename(filePath),
+        fileSize: fileStats.size,
+        fileType: path.extname(filePath).toLowerCase(),
+        aiSuggestedName: analysis.clientName ? `${analysis.type}_${analysis.clientName}_${analysis.date || 'Unknown'}` : 'Unknown',
+        analysisResult: {
+          type: analysis.type,
+          clientName: analysis.clientName,
+          date: analysis.date,
+          confidence: analysis.confidence,
+          source: analysis.source || 'unknown',
+          aiConfidence: analysis.aiConfidence || 0
+        },
+        modelVersion: process.env.AI_MODEL || 'gpt-3.5-turbo',
+        promptVersion: '1.0', // TODO: Track prompt versions
+        processingTimeMs: Date.now() - Date.now(), // TODO: Track actual processing time
+        documentPreview: extractedText.substring(0, 200)
+      });
+      
+      await errorLogger.logInfo(`Quality log entry created for: ${path.basename(filePath)}`);
+    } catch (qualityLogError) {
+      await errorLogger.logWarning('Failed to log quality data', qualityLogError);
+      // Don't fail the main process for logging errors
+    }
+
     await errorLogger.logInfo(`Analysis-only processing completed: ${path.basename(filePath)}`);
     return analysis;
     
   } catch (error) {
     await errorLogger.logError(`Analysis-only processing failed for ${path.basename(filePath)}`, error);
     throw error;
+  }
+}
+
+// Helper function to generate file hash for caching
+async function getFileHash(filePath) {
+  try {
+    const stats = await fsp.stat(filePath);
+    const data = `${filePath}:${stats.mtime.getTime()}:${stats.size}`;
+    return crypto.createHash('sha256').update(data).digest('hex');
+  } catch (error) {
+    // Fallback to path-based hash if stats fail
+    return crypto.createHash('sha256').update(filePath).digest('hex');
+  }
+}
+
+// Helper function to generate alternative filename suggestions
+function generateAlternativeSuggestions(primarySuggestion, analysis, fileExtension) {
+  if (!primarySuggestion) return [];
+  
+  const alternatives = [];
+  const baseName = primarySuggestion.replace(fileExtension, '');
+  
+  try {
+    // Format variation: replace underscores with hyphens
+    const hyphenVersion = baseName.replace(/_/g, '-') + fileExtension;
+    if (hyphenVersion !== primarySuggestion) {
+      alternatives.push(hyphenVersion);
+    }
+    
+    // Abbreviation version: shorten document type
+    const abbrevVersion = baseName
+      .replace(/Invoice/g, 'Inv')
+      .replace(/Contract/g, 'Cont')
+      .replace(/Statement/g, 'Stmt')
+      .replace(/Receipt/g, 'Rcpt')
+      .replace(/Report/g, 'Rpt') + fileExtension;
+    if (abbrevVersion !== primarySuggestion && abbrevVersion !== hyphenVersion) {
+      alternatives.push(abbrevVersion);
+    }
+    
+    // Compact version: shorter format
+    if (analysis.date) {
+      const compactDate = analysis.date.replace(/-/g, '').substring(2); // YYMMDD
+      const compactVersion = `${analysis.type.substring(0, 3)}_${analysis.clientName?.substring(0, 8) || 'Unknown'}_${compactDate}${fileExtension}`;
+      if (compactVersion !== primarySuggestion && alternatives.length < 3) {
+        alternatives.push(compactVersion);
+      }
+    }
+    
+    // Limit to 3 alternatives
+    return alternatives.slice(0, 3);
+  } catch (error) {
+    console.warn('Error generating alternative suggestions:', error);
+    return [];
+  }
+}
+
+// Helper function to generate fallback filename
+function generateFallbackFilename(analysis, fileExtension) {
+  try {
+    const type = analysis.type || 'Document';
+    const client = analysis.clientName || 'Unknown';
+    const date = analysis.date || 'UnknownDate';
+    return `${type}_${client}_${date}${fileExtension}`;
+  } catch (error) {
+    console.warn('Error generating fallback filename:', error);
+    return `Document_Unknown_UnknownDate${fileExtension}`;
+  }
+}
+
+// Helper function to create document preview
+function getDocumentPreview(text) {
+  if (!text) return '';
+  
+  try {
+    // Clean the text: remove excessive whitespace, line breaks, control characters
+    const cleaned = text
+      .replace(/\r\n/g, ' ')
+      .replace(/\n/g, ' ')
+      .replace(/\r/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+      .trim();
+    
+    // Return first 200 characters
+    return cleaned.substring(0, 200);
+  } catch (error) {
+    console.warn('Error creating document preview:', error);
+    return text.substring(0, 200);
   }
 }
 
@@ -1514,9 +1641,27 @@ app.whenReady().then(async () => {
       }
     });
 
-    ipcMain.handle('file:rename', async (event, oldPath, newName) => {
+    ipcMain.handle('file:rename', async (event, oldPath, newName, options = {}) => {
+      const startTime = Date.now();
+      
       try {
-        await errorLogger.logInfo(`Renaming file: ${path.basename(oldPath)} -> ${newName}`);
+        // Import required services
+        const FileOpsLogger = require('../services/fileOpsLogger');
+        const FileOpsHelpers = require('../services/fileOpsHelpers');
+        
+        const fileOpsLogger = new FileOpsLogger({ errorLogger: errorLogger });
+        
+        // Extract options with defaults
+        const {
+          source = 'manual',
+          metadata = {},
+          confidence = null,
+          moveToDir = null,
+          documentType = null,
+          documentHash = null
+        } = options;
+        
+        await errorLogger.logInfo(`Renaming file: ${path.basename(oldPath)} -> ${newName} (source: ${source})`);
         
         // Validate inputs
         if (!oldPath || !newName) {
@@ -1528,28 +1673,248 @@ app.whenReady().then(async () => {
           throw new Error('Source file does not exist');
         }
         
-        // Get directory and construct new path
-        const dir = path.dirname(oldPath);
-        const newPath = path.join(dir, newName);
-        
-        // Check if new file already exists
-        if (fs.existsSync(newPath)) {
-          throw new Error('A file with that name already exists');
+        // Validate filename
+        const validation = FileOpsHelpers.validateFilename(newName);
+        if (!validation.valid) {
+          throw new Error(`Invalid filename: ${validation.error}`);
         }
         
-        // Rename the file
+        const sanitizedName = validation.sanitized;
+        
+        // Determine target directory
+        let targetDir;
+        if (moveToDir) {
+          // Use specified directory
+          targetDir = moveToDir;
+        } else if (documentType && source === 'ai') {
+          // Auto-sort by document type for AI suggestions
+          const baseDir = path.join(path.dirname(oldPath), '..', 'sorted');
+          targetDir = FileOpsHelpers.getSortingDirectory(baseDir, documentType);
+        } else {
+          // Use same directory as original file
+          targetDir = path.dirname(oldPath);
+        }
+        
+        // Ensure target directory exists
+        await FileOpsHelpers.ensureDirectoryExists(targetDir);
+        
+        // Get unique filename to avoid conflicts
+        const uniqueName = await FileOpsHelpers.getUniqueFilename(targetDir, sanitizedName);
+        const newPath = path.join(targetDir, uniqueName);
+        
+        // Check file permissions
+        const hasPermissions = await FileOpsHelpers.checkFilePermissions(oldPath, 'r');
+        if (!hasPermissions) {
+          throw new Error('No read permission for source file');
+        }
+        
+        // Get file metadata for logging
+        const fileMetadata = await FileOpsHelpers.getFileMetadata(oldPath);
+        
+        // Rename/move the file
         await fsp.rename(oldPath, newPath);
         
-        await errorLogger.logInfo(`File renamed successfully: ${path.basename(oldPath)} -> ${newName}`);
-        return { success: true, newPath: newPath };
+        const duration = Date.now() - startTime;
+        
+        // Log successful operation
+        await fileOpsLogger.logFileOperation({
+          oldPath: oldPath,
+          newPath: newPath,
+          status: 'success',
+          source: source,
+          confidence: confidence,
+          documentHash: documentHash,
+          documentType: documentType,
+          durationMs: duration,
+          metadata: {
+            ...metadata,
+            fileSize: fileMetadata.sizeFormatted,
+            operation: 'rename'
+          }
+        });
+        
+        await errorLogger.logInfo(`File renamed successfully: ${path.basename(oldPath)} -> ${path.basename(newPath)} (${duration}ms)`);
+        
+        return { 
+          success: true, 
+          newPath: newPath,
+          originalName: path.basename(oldPath),
+          newName: path.basename(newPath),
+          targetDir: targetDir,
+          durationMs: duration,
+          sanitized: validation.changes
+        };
+        
       } catch (error) {
+        const duration = Date.now() - startTime;
+        
+        // Log failed operation
+        try {
+          const FileOpsLogger = require('../services/fileOpsLogger');
+          const fileOpsLogger = new FileOpsLogger({ errorLogger: errorLogger });
+          
+          await fileOpsLogger.logFileOperation({
+            oldPath: oldPath,
+            newPath: null,
+            status: 'failed',
+            source: options.source || 'manual',
+            confidence: options.confidence,
+            documentHash: options.documentHash,
+            documentType: options.documentType,
+            durationMs: duration,
+            error: error.message,
+            metadata: options.metadata || {}
+          });
+        } catch (logError) {
+          console.warn('Failed to log file operation error:', logError.message);
+        }
+        
         await errorLogger.logError('Error renaming file', error);
-        return { success: false, error: error.message };
+        return { 
+          success: false, 
+          error: error.message,
+          durationMs: duration
+        };
       }
     });
 
-    // Missing IPC handler for 'analyze-file' - provides analysis without file operations
+    // Batch file operations handler
+    ipcMain.handle('file:batch-rename', async (event, operations) => {
+      const startTime = Date.now();
+      
+      try {
+        // Import required services
+        const FileOpsLogger = require('../services/fileOpsLogger');
+        const fileOpsLogger = new FileOpsLogger({ errorLogger: errorLogger });
+        
+        if (!Array.isArray(operations) || operations.length === 0) {
+          throw new Error('Invalid operations array provided');
+        }
+        
+        await errorLogger.logInfo(`Starting batch file operations: ${operations.length} files`);
+        
+        const results = [];
+        const logEntries = [];
+        
+        // Process operations sequentially
+        for (let i = 0; i < operations.length; i++) {
+          const operation = operations[i];
+          const operationStart = Date.now();
+          
+          try {
+            // Validate operation parameters
+            const FileOpsHelpers = require('../services/fileOpsHelpers');
+            const validation = FileOpsHelpers.validateOperationParams(operation);
+            
+            if (!validation.valid) {
+              throw new Error(validation.error);
+            }
+            
+            // Process single file operation
+            const result = await new Promise((resolve) => {
+              // Simulate the file:rename handler logic
+              const { oldPath, newName, ...options } = operation;
+              
+              // Call the enhanced file:rename handler
+              ipcMain.emit('file:rename', null, oldPath, newName, options)
+                .then(resolve)
+                .catch(resolve);
+            });
+            
+            const operationDuration = Date.now() - operationStart;
+            
+            // Prepare log entry
+            const logEntry = {
+              oldPath: operation.oldPath,
+              newPath: result.success ? result.newPath : null,
+              status: result.success ? 'success' : 'failed',
+              source: operation.source || 'batch',
+              confidence: operation.confidence,
+              documentHash: operation.documentHash,
+              documentType: operation.documentType,
+              durationMs: operationDuration,
+              error: result.error || null,
+              metadata: operation.metadata || {}
+            };
+            
+            logEntries.push(logEntry);
+            results.push({
+              ...result,
+              originalName: path.basename(operation.oldPath),
+              durationMs: operationDuration
+            });
+            
+            // Emit progress event
+            event.sender.send('file:batch-progress', {
+              current: i + 1,
+              total: operations.length,
+              completed: results.filter(r => r.success).length,
+              failed: results.filter(r => !r.success).length,
+              currentFile: path.basename(operation.oldPath)
+            });
+            
+          } catch (error) {
+            const operationDuration = Date.now() - operationStart;
+            
+            const logEntry = {
+              oldPath: operation.oldPath,
+              newPath: null,
+              status: 'failed',
+              source: operation.source || 'batch',
+              confidence: operation.confidence,
+              documentHash: operation.documentHash,
+              documentType: operation.documentType,
+              durationMs: operationDuration,
+              error: error.message,
+              metadata: operation.metadata || {}
+            };
+            
+            logEntries.push(logEntry);
+            results.push({
+              success: false,
+              error: error.message,
+              originalName: path.basename(operation.oldPath),
+              durationMs: operationDuration
+            });
+          }
+        }
+        
+        // Log all operations
+        await fileOpsLogger.logBatchFileOperations(logEntries);
+        
+        const totalDuration = Date.now() - startTime;
+        const successful = results.filter(r => r.success).length;
+        const failed = results.filter(r => !r.success).length;
+        
+        await errorLogger.logInfo(`Batch operations completed: ${successful} successful, ${failed} failed (${totalDuration}ms)`);
+        
+        return {
+          success: true,
+          results: results,
+          summary: {
+            total: operations.length,
+            successful: successful,
+            failed: failed,
+            durationMs: totalDuration
+          }
+        };
+        
+      } catch (error) {
+        const totalDuration = Date.now() - startTime;
+        
+        await errorLogger.logError('Batch file operations failed', error);
+        return {
+          success: false,
+          error: error.message,
+          durationMs: totalDuration
+        };
+      }
+    });
+
+    // Enhanced IPC handler for 'analyze-file' - provides enriched analysis data for UI
     ipcMain.handle('analyze-file', async (event, filePath) => {
+      const startTime = Date.now();
+      
       try {
         await errorLogger.logInfo(`Analyze file requested: ${path.basename(filePath)}`);
         
@@ -1563,21 +1928,422 @@ app.whenReady().then(async () => {
           throw new Error('File does not exist');
         }
         
+        // Check cache first
+        const fileHash = await getFileHash(filePath);
+        const cached = analysisCache.get(fileHash);
+        if (cached) {
+          await errorLogger.logInfo(`Serving cached analysis for: ${path.basename(filePath)}`);
+          return cached;
+        }
+        
+        // Get file statistics
+        const fileStats = await fsp.stat(filePath);
+        const fileExtension = path.extname(filePath).toLowerCase();
+        
         // Perform analysis-only processing (no file operations)
         const analysis = await analyzeFileOnly(filePath);
         
-        await errorLogger.logInfo(`File analysis completed: ${path.basename(filePath)} - Type: ${analysis.type}, Confidence: ${analysis.confidence}`);
-        return { 
+        // Generate AI suggestions using FilenameGenerator
+        let aiSuggestions = { primary: null, alternatives: [] };
+        try {
+          const filenameGenerator = new FilenameGenerator();
+          const primarySuggestion = await filenameGenerator.generateFilenameFromMetadata(analysis, fileExtension);
+          aiSuggestions.primary = primarySuggestion;
+          aiSuggestions.alternatives = generateAlternativeSuggestions(primarySuggestion, analysis, fileExtension);
+        } catch (aiError) {
+          await errorLogger.logWarning('AI filename generation failed, using fallback', aiError);
+          aiSuggestions.primary = generateFallbackFilename(analysis, fileExtension);
+          aiSuggestions.alternatives = [];
+        }
+        
+        // Create document preview (first 200 chars of cleaned text)
+        const previewText = getDocumentPreview(analysis.rawText || analysis.textCleaned || '');
+        
+        // Build enriched response
+        const enrichedData = {
+          // File information
+          filePath: filePath,
+          fileName: path.basename(filePath),
+          fileType: fileExtension,
+          fileSizeBytes: fileStats.size,
+          createdAt: fileStats.birthtime,
+          modifiedAt: fileStats.mtime,
+          
+          // Document analysis
+          documentType: analysis.type,
+          typeConfidence: analysis.confidence,
+          detectedEntities: {
+            clientName: analysis.clientName,
+            date: analysis.date,
+            amount: analysis.amount,
+            referenceId: analysis.title,
+            title: analysis.title
+          },
+          
+          // AI suggestions
+          aiSuggestions: aiSuggestions,
+          
+          // UI data
+          previewText: previewText,
+          processingMethod: analysis.source || 'enhanced-parsing',
+          analysisTimestamp: new Date().toISOString(),
+          
+          // Additional metadata
+          rawAnalysis: analysis,
+          processingTimeMs: Date.now() - startTime
+        };
+        
+        const response = { 
           success: true, 
-          analysis: analysis,
+          partial: false,
+          data: enrichedData,
           message: `Analysis completed: ${analysis.type} (${Math.round(analysis.confidence * 100)}% confidence)`
         };
+        
+        // Cache the response
+        analysisCache.set(fileHash, response);
+        
+        await errorLogger.logInfo(`File analysis completed: ${path.basename(filePath)} - Type: ${analysis.type}, Confidence: ${analysis.confidence}`);
+        return response;
+        
       } catch (error) {
         await errorLogger.logError(`Error analyzing file: ${path.basename(filePath)}`, error);
+        
+        // Return partial data if possible
+        try {
+          const fileStats = await fsp.stat(filePath);
+          const fileExtension = path.extname(filePath).toLowerCase();
+          
+          return { 
+            success: false, 
+            partial: true,
+            error: error.message,
+            data: {
+              filePath: filePath,
+              fileName: path.basename(filePath),
+              fileType: fileExtension,
+              fileSizeBytes: fileStats.size,
+              createdAt: fileStats.birthtime,
+              modifiedAt: fileStats.mtime,
+              documentType: 'Unknown',
+              typeConfidence: 0,
+              detectedEntities: {},
+              aiSuggestions: { primary: null, alternatives: [] },
+              previewText: '',
+              processingMethod: 'error',
+              analysisTimestamp: new Date().toISOString(),
+              processingTimeMs: Date.now() - startTime
+            },
+            message: `Analysis failed: ${error.message}`
+          };
+        } catch (fallbackError) {
+          return { 
+            success: false, 
+            partial: false,
+            error: error.message,
+            data: null,
+            message: `Analysis failed: ${error.message}`
+          };
+        }
+      }
+    });
+
+    // Quality logging IPC handler
+    ipcMain.handle('log-suggestion-quality', async (event, data) => {
+      try {
+        await errorLogger.logInfo(`Quality feedback received for document: ${data.documentId || 'unknown'}`);
+        
+        // Validate input
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid quality data provided');
+        }
+        
+        // Update the quality log entry with user action data
+        await QualityLogger.updateUserAction(data.documentId, {
+          userAction: data.userAction,
+          finalName: data.finalName,
+          timeToDecisionMs: data.timeToDecisionMs,
+          qualityRating: data.qualityRating,
+          regenerationCount: data.regenerationCount || 0,
+          feedbackTimestamp: new Date().toISOString()
+        });
+        
+        return { 
+          success: true, 
+          message: 'Quality feedback logged successfully' 
+        };
+      } catch (error) {
+        await errorLogger.logError('Error logging quality feedback', error);
         return { 
           success: false, 
           error: error.message,
-          message: `Analysis failed: ${error.message}`
+          message: `Failed to log quality feedback: ${error.message}`
+        };
+      }
+    });
+
+    // File stats IPC handler
+    ipcMain.handle('get-file-stats', async (event, filePath) => {
+      try {
+        await errorLogger.logInfo(`Getting file stats for: ${path.basename(filePath)}`);
+        
+        if (!filePath || typeof filePath !== 'string' || filePath.trim().length === 0) {
+          throw new Error('Invalid file path provided');
+        }
+        
+        if (!fs.existsSync(filePath)) {
+          throw new Error('File does not exist');
+        }
+        
+        const stats = await fsp.stat(filePath);
+        
+        return {
+          success: true,
+          size: stats.size,
+          created: stats.birthtime.toISOString(),
+          modified: stats.mtime.toISOString(),
+          isFile: stats.isFile(),
+          isDirectory: stats.isDirectory()
+        };
+      } catch (error) {
+        await errorLogger.logError(`Error getting file stats: ${path.basename(filePath)}`, error);
+        return { 
+          success: false, 
+          error: error.message 
+        };
+      }
+    });
+
+    // Quality logging IPC handler
+    ipcMain.handle('log-suggestion-quality', async (event, qualityData) => {
+      try {
+        // Import QualityLogger
+        const QualityLogger = require('../services/qualityLogger');
+        const qualityLogger = new QualityLogger({ errorLogger: errorLogger });
+        
+        // Log the quality data
+        const result = await qualityLogger.logQuality(qualityData);
+        
+        return {
+          success: result.success,
+          status: result.status,
+          timestamp: result.timestamp
+        };
+        
+      } catch (error) {
+        // Log error internally but don't throw
+        await errorLogger.logError(`Quality logging failed: ${error.message}`, {
+          context: qualityData,
+          source: 'quality-logging-handler'
+        });
+        
+        return {
+          success: false,
+          status: 'failed',
+          error: error.message
+        };
+      }
+    });
+
+    // Batch quality logging IPC handler
+    ipcMain.handle('log-batch-quality', async (event, qualityDataArray) => {
+      try {
+        // Import QualityLogger
+        const QualityLogger = require('../services/qualityLogger');
+        const qualityLogger = new QualityLogger({ errorLogger: errorLogger });
+        
+        // Log the batch quality data
+        const result = await qualityLogger.logBatchQuality(qualityDataArray);
+        
+        return {
+          success: result.success,
+          status: result.status,
+          processed: result.processed,
+          successful: result.successful,
+          failed: result.failed
+        };
+        
+      } catch (error) {
+        // Log error internally but don't throw
+        await errorLogger.logError(`Batch quality logging failed: ${error.message}`, {
+          context: { batchSize: qualityDataArray?.length },
+          source: 'batch-quality-logging-handler'
+        });
+        
+        return {
+          success: false,
+          status: 'batch_failed',
+          error: error.message
+        };
+      }
+    });
+
+    // Get quality statistics IPC handler
+    ipcMain.handle('get-quality-stats', async (event) => {
+      try {
+        // Import QualityLogger
+        const QualityLogger = require('../services/qualityLogger');
+        const qualityLogger = new QualityLogger({ errorLogger: errorLogger });
+        
+        // Get quality statistics
+        const stats = await qualityLogger.getQualityStats();
+        
+        return {
+          success: true,
+          stats: stats
+        };
+        
+      } catch (error) {
+        await errorLogger.logError(`Failed to get quality stats: ${error.message}`, {
+          source: 'quality-stats-handler'
+        });
+        
+        return {
+          success: false,
+          error: error.message
+        };
+      }
+    });
+
+    // Regenerate suggestion IPC handler
+    ipcMain.handle('regenerate-suggestion', async (event, filePath, previousSuggestion, regenCount = 0) => {
+      const startTime = Date.now();
+      const fileId = path.basename(filePath);
+      
+      try {
+        await errorLogger.logInfo(`Regenerating suggestion for: ${fileId} (attempt ${regenCount + 1})`);
+        
+        // Validate input
+        if (!filePath || typeof filePath !== 'string' || filePath.trim().length === 0) {
+          throw new Error('Invalid file path provided');
+        }
+        
+        if (!fs.existsSync(filePath)) {
+          throw new Error('File does not exist');
+        }
+        
+        // Enforce 3-attempt limit using frontend regenCount
+        if (regenCount >= 3) {
+          await errorLogger.logWarning(`Regeneration limit reached for ${fileId} (attempt ${regenCount + 1})`);
+          return {
+            success: false,
+            error: 'Regeneration limit reached',
+            limitReached: true,
+            message: 'You have reached the maximum of 3 regeneration attempts for this file.'
+          };
+        }
+        
+        // Calculate temperature progression: 0.7 + (0.1 × attemptCount) up to max 0.9
+        const temperature = Math.min(0.9, 0.7 + (0.1 * regenCount));
+        
+        // Get file metadata for context
+        const fileStats = await fsp.stat(filePath);
+        const fileExtension = path.extname(filePath);
+        
+        // Use FilenameGenerator for regeneration with enhanced context
+        const filenameGenerator = new FilenameGenerator({
+          temperature: temperature,
+          model: 'gpt-4-turbo' // Use more capable model for regeneration
+        });
+        
+        // First, get the document analysis for context
+        const enhancedParsingService = new EnhancedParsingService();
+        const analysisResult = await enhancedParsingService.analyzeDocumentEnhanced(
+          await fsp.readFile(filePath, 'utf8'),
+          filePath
+        );
+        
+        if (!analysisResult.success) {
+          throw new Error('Failed to analyze document for regeneration');
+        }
+        
+        // Generate new filename with previous suggestion context
+        const newFilename = await filenameGenerator.generateFilenameFromMetadata(
+          analysisResult.analysis,
+          fileExtension,
+          {
+            previousSuggestion: previousSuggestion,
+            regenerationAttempt: regenCount + 1,
+            temperature: temperature
+          }
+        );
+        
+        if (!newFilename) {
+          throw new Error('Failed to generate new filename');
+        }
+        
+        // Generate alternatives using rule-based approach
+        const alternatives = generateAlternativeSuggestions(
+          newFilename,
+          analysisResult.analysis,
+          fileExtension
+        );
+        
+        // Log successful regeneration
+        const processingTime = Date.now() - startTime;
+        await errorLogger.logInfo(`Regeneration successful for ${fileId}: "${previousSuggestion}" → "${newFilename}" (${processingTime}ms)`);
+        
+        // Log detailed regeneration context for quality analysis
+        if (window.electronAPI && window.electronAPI.logSuggestionQuality) {
+          try {
+            await window.electronAPI.logSuggestionQuality({
+              filePath: filePath,
+              action: 'regenerated',
+              previousSuggestion: previousSuggestion,
+              newSuggestion: newFilename,
+              regenerationAttempt: regenCount + 1,
+              temperature: temperature,
+              processingTimeMs: processingTime,
+              timestamp: new Date().toISOString(),
+              reason: 'User clicked regenerate button',
+              status: 'success'
+            });
+          } catch (logError) {
+            console.warn('Failed to log regeneration quality:', logError.message);
+          }
+        }
+        
+        return {
+          success: true,
+          suggestion: newFilename,
+          alternatives: alternatives,
+          confidence: analysisResult.analysis.confidence || 0.7,
+          regenerationAttempt: regenCount + 1,
+          temperature: temperature,
+          processingTimeMs: processingTime
+        };
+        
+      } catch (error) {
+        const processingTime = Date.now() - startTime;
+        await errorLogger.logError(`Error regenerating suggestion for ${fileId} (attempt ${regenCount + 1}): ${error.message}`);
+        
+        // Log failed regeneration attempt
+        if (window.electronAPI && window.electronAPI.logSuggestionQuality) {
+          try {
+            await window.electronAPI.logSuggestionQuality({
+              filePath: filePath,
+              action: 'regenerated',
+              previousSuggestion: previousSuggestion,
+              newSuggestion: null,
+              regenerationAttempt: regenCount + 1,
+              temperature: Math.min(0.9, 0.7 + (0.1 * regenCount)),
+              processingTimeMs: processingTime,
+              timestamp: new Date().toISOString(),
+              reason: 'User clicked regenerate button',
+              status: 'failed',
+              error: error.message
+            });
+          } catch (logError) {
+            console.warn('Failed to log regeneration failure:', logError.message);
+          }
+        }
+        
+        return {
+          success: false,
+          error: error.message,
+          regenerationAttempt: regenCount + 1,
+          processingTimeMs: processingTime,
+          message: `Regeneration failed: ${error.message}`
         };
       }
     });

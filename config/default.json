@@ -1,7 +1,6 @@
 {
   "ai": {
     "enabled": false,
-    "model": "gpt-3.5-turbo",
     "confidenceThreshold": 0.5,
     "batchSize": 5,
     "maxRetries": 3,
@@ -12,6 +11,56 @@
       "maxConcurrentRequests": 3,
       "batchDelay": 100,
       "batchTimeout": 2000
+    },
+    "filenameGeneration": {
+      "model": "gpt-4-turbo",
+      "temperature": 0.5,
+      "maxTokens": 300,
+      "timeout": 30000
+    },
+    "metadataExtraction": {
+      "model": "gpt-4-turbo", 
+      "temperature": 0.25,
+      "maxTokens": 250,
+      "timeout": 30000
+    },
+    "qualityLogging": {
+      "enabled": true,
+      "logLevel": "info",
+      "logRequestResponse": true,
+      "logPerformance": true,
+      "maxResponseLength": 500
+    },
+    "contextEnhancement": {
+      "maxTextLength": 6000,
+      "includeFileMetadata": true,
+      "includePreExtractedEntities": true,
+      "metadataFields": ["created", "modified", "size", "name", "mimeType"],
+      "entityFields": ["docType", "clientName", "date", "amount"]
+    },
+    "promptVersioning": {
+      "filenameGeneration": {
+        "version": "v1.6.1",
+        "templatePath": "prompts/filename_v1.6.1.txt",
+        "description": "Enhanced filename generation with context improvements",
+        "created": "2025-10-17",
+        "parameters": {
+          "model": "gpt-4-turbo",
+          "temperature": 0.5,
+          "maxTokens": 300
+        }
+      },
+      "metadataExtraction": {
+        "version": "v1.6.1",
+        "templatePath": "prompts/metadata_v1.6.1.txt",
+        "description": "Enhanced metadata extraction with context improvements",
+        "created": "2025-10-17",
+        "parameters": {
+          "model": "gpt-4-turbo",
+          "temperature": 0.25,
+          "maxTokens": 250
+        }
+      }
     }
   },
   "cache": {

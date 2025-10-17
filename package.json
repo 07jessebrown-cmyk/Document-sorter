@@ -14,6 +14,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:functional": "jest tests/functional --runInBand --detectOpenHandles",
     "test:ci": "NODE_OPTIONS='--max-old-space-size=8192 --expose-gc' jest --coverage --watchAll=false --maxWorkers=1 --testPathPattern='tests/(fileService|ai_prompts|usability|performance|aiTextService|aiTextService-batching|ai-integration|integration-simple|integration-bilingual|integration|llmClient|parsingService|renamingService|unit/signatureDetector|unit/langService).test.js'",
     "test:ci-mock": "MOCK_AI_SERVICES=true jest --coverage --watchAll=false --maxWorkers=1 --maxOldSpaceSize=4096",
     "test:e2e": "playwright test",
@@ -73,6 +74,8 @@
     "natural": "^6.7.0",
     "openai": "^6.3.0",
     "pdf-parse": "^1.1.1",
+    "pdf-poppler": "^0.2.3",
+    "pdf2pic": "^3.2.0",
     "puppeteer": "^24.22.2",
     "sharp": "^0.33.5",
     "tesseract.js": "^5.1.0"

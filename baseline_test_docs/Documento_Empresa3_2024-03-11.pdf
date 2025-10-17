@@ -1,0 +1,119 @@
+%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 300
+>>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(FACTURA) Tj
+0 -20 Td
+(Número de factura: FAC-2024-001) Tj
+0 -20 Td
+(Fecha: 15 de enero de 2024) Tj
+0 -20 Td
+(Cliente: Corporación Acme) Tj
+0 -20 Td
+(Dirección: Calle Principal 123) Tj
+0 -20 Td
+(Ciudad, Estado 12345) Tj
+0 -40 Td
+(Descripción) Tj
+200 0 Td
+(Cantidad) Tj
+100 0 Td
+(Precio Unitario) Tj
+100 0 Td
+(Total) Tj
+0 -20 Td
+(Licencia de Software) Tj
+200 0 Td
+(1) Tj
+100 0 Td
+($500.00) Tj
+100 0 Td
+($500.00) Tj
+0 -20 Td
+(Servicios de Soporte) Tj
+200 0 Td
+(12) Tj
+100 0 Td
+($100.00) Tj
+100 0 Td
+($1,200.00) Tj
+0 -20 Td
+(Consultoría) Tj
+200 0 Td
+(8) Tj
+100 0 Td
+($150.00) Tj
+100 0 Td
+($1,200.00) Tj
+0 -40 Td
+(Subtotal: $2,900.00) Tj
+0 -20 Td
+(Impuestos (8%): $232.00) Tj
+0 -20 Td
+(Total: $3,132.00) Tj
+0 -40 Td
+(Términos de pago: Neto 30 días) Tj
+0 -20 Td
+(Gracias por su negocio.) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000254 00000 n 
+0000000605 00000 n 
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+664
+%%EOF

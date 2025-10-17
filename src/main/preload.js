@@ -33,5 +33,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // AI and Settings
   suggestRename: (filePath) => ipcRenderer.invoke('ai:suggest-rename', filePath),
   testBackendConnection: () => ipcRenderer.invoke('test-backend-connection'),
-  renameFile: (oldPath, newName) => ipcRenderer.invoke('file:rename', oldPath, newName)
+  
+  // Enhanced file operations (unified API)
+  renameFile: (oldPath, newName, options) => ipcRenderer.invoke('file:rename', oldPath, newName, options),
+  batchRenameFiles: (operations) => ipcRenderer.invoke('file:batch-rename', operations),
+  
+  // Quality logging
+  logSuggestionQuality: (data) => ipcRenderer.invoke('log-suggestion-quality', data),
+  logBatchQuality: (dataArray) => ipcRenderer.invoke('log-batch-quality', dataArray),
+  getQualityStats: () => ipcRenderer.invoke('get-quality-stats'),
+  
+  // File stats
+  getFileStats: (filePath) => ipcRenderer.invoke('get-file-stats', filePath),
+  
+  // AI regeneration
+  regenerateSuggestion: (filePath, previousSuggestion, regenCount) => ipcRenderer.invoke('regenerate-suggestion', filePath, previousSuggestion, regenCount),
+  
+  // File operations events
+  onFileBatchProgress: (callback) => ipcRenderer.on('file:batch-progress', callback),
+  
+  // Additional utility functions
+  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
 });

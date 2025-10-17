@@ -163,7 +163,7 @@ app.post('/api/rename-document', authenticateClient, async (req, res) => {
     // Send to OpenAI for intelligent naming
     const systemPrompt = "You are a professional document naming AI. RULES: 1) Identify document type (Invoice, Contract, Receipt, Statement, Report, Letter, Assignment, Essay, Notes) 2) Extract title/subject 3) Extract author/student name 4) Extract class/course if mentioned 5) Extract date (YYYY-MM-DD) 6) Format as DocumentType_Title_Author_Class_Date.pdf 7) Use underscores, no spaces 8) Keep under 60 chars 9) Use smart placeholders if missing info. EXAMPLES: Document: 'MATH 101 Assignment 3: Calculus Problems Due: March 15, 2024 Student: John Smith' Output: Assignment_CalculusProblems_JohnSmith_MATH101_2024-03-15.pdf | Document: 'INVOICE #12345 Bill To: Acme Corporation Date: January 15, 2024' Output: Invoice_AcmeCorporation_2024-01-15_12345.pdf | Document: 'History Essay: World War II Causes Student: Jane Doe Class: HIST 201' Output: Essay_WorldWarIICauses_JaneDoe_HIST201.pdf. Now analyze this document and respond with ONLY the filename, nothing else.";
     
-    const userPrompt = "DOCUMENT CONTENT:\n" + extractedText.substring(0, 3000);
+    const userPrompt = "DOCUMENT CONTENT:\n" + extractedText.substring(0, 6000);
     
     const messages = [
       {
@@ -274,7 +274,7 @@ app.post('/api/process-document', authenticateClient, async (req, res) => {
     
     const systemPrompt = "You are a professional document naming AI. RULES: 1) Identify document type (Invoice, Contract, Receipt, Statement, Report, Letter) 2) Extract company/client name 3) Extract date (YYYY-MM-DD) 4) Extract ID numbers 5) Format as DocumentType_CompanyName_Date_ID.pdf 6) Use underscores, no spaces 7) Keep under 60 chars 8) Use smart placeholders if missing info. EXAMPLES: Document: 'INVOICE #12345 Bill To: Acme Corporation Date: January 15, 2024' Output: Invoice_AcmeCorporation_2024-01-15_12345.pdf | Document: 'SERVICE AGREEMENT Between TechCorp and John Smith Effective Date: March 1, 2024' Output: ServiceAgreement_TechCorp_JohnSmith_2024-03-01.pdf | Document: 'RECEIPT Starbucks Coffee Date: 01/20/2024' Output: Receipt_Starbucks_2024-01-20.pdf. Now analyze this document and respond with ONLY the filename, nothing else.";
 
-    const userPrompt = "DOCUMENT CONTENT:\n" + text.substring(0, 3000);
+    const userPrompt = "DOCUMENT CONTENT:\n" + text.substring(0, 6000);
 
     const messages = [
       {

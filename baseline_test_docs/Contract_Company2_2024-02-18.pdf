@@ -1,0 +1,117 @@
+%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 400
+>>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(SERVICE AGREEMENT) Tj
+0 -20 Td
+(Agreement Date: January 15, 2024) Tj
+0 -20 Td
+(Between: ABC Corporation and XYZ Ltd) Tj
+0 -40 Td
+(TERMS AND CONDITIONS) Tj
+0 -20 Td
+(1. Service Description) Tj
+0 -20 Td
+(This agreement covers the provision of software development) Tj
+0 -20 Td
+(services including design, implementation, and testing.) Tj
+0 -40 Td
+(2. Duration) Tj
+0 -20 Td
+(The term of this agreement is 12 months commencing) Tj
+0 -20 Td
+(on the effective date.) Tj
+0 -40 Td
+(3. Payment Terms) Tj
+0 -20 Td
+(Total contract value: $50,000.00) Tj
+0 -20 Td
+(Payment schedule: Monthly installments of $4,166.67) Tj
+0 -40 Td
+(4. Signatures) Tj
+0 -20 Td
+(ABC Corporation) Tj
+200 0 Td
+(XYZ Ltd) Tj
+0 -40 Td
+(Authorized Signature:) Tj
+200 0 Td
+(Authorized Signature:) Tj
+0 -20 Td
+(____________________) Tj
+200 0 Td
+(____________________) Tj
+0 -20 Td
+(John Smith, CEO) Tj
+200 0 Td
+(Jane Doe, Director) Tj
+0 -20 Td
+(Date: _______________) Tj
+200 0 Td
+(Date: _______________) Tj
+0 -40 Td
+(Please sign and return this agreement to complete) Tj
+0 -20 Td
+(the contract execution process.) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000254 00000 n 
+0000000705 00000 n 
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+764
+%%EOF

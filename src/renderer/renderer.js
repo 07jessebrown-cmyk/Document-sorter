@@ -54,6 +54,9 @@ const useOCRToggle = document.getElementById('useOCRToggle');
 const useTableExtractionToggle = document.getElementById('useTableExtractionToggle');
 const useLLMEnhancerToggle = document.getElementById('useLLMEnhancerToggle');
 
+// Legacy batch mode toggle
+const legacyBatchModeToggle = document.getElementById('legacyBatchModeToggle');
+
 // Tab elements
 const tabButtons = document.querySelectorAll('.tab-button');
 const settingsTab = document.getElementById('settingsTab');
@@ -313,7 +316,11 @@ function displayFilesFromPaths(paths, fileListLike = []) {
             <span class="file-icon">${fileIcon}</span>
             <span class="file-name">${info.name}</span>
             <span class="file-size">${fileSize}</span>
-            <span class="file-status" style="margin-left:8px;color:#888"></span>
+            <span class="file-status" style="margin-left:8px;color:#888">Analyzing...</span>
+            <div class="file-actions" style="margin-left:8px;display:none;">
+              <button class="btn-small retry-btn" onclick="retryAnalysis('${fullPath}')" title="Retry AI analysis">🔄</button>
+              <button class="btn-small view-suggestions-btn" onclick="viewAISuggestions('${fullPath}')" title="View AI suggestions">✨</button>
+            </div>
         `;
     fileListItems.appendChild(listItem);
   });
@@ -324,10 +331,17 @@ function displayFilesFromPaths(paths, fileListLike = []) {
   // Update preview table
   updatePreviewTable();
   
-  // Analyze metadata for new files
+  // Trigger AI analysis for new files (sequential processing or legacy batch mode)
   paths.forEach(filePath => {
     if (!fileMetadata.has(filePath)) {
-      analyzeFileMetadata(filePath);
+      // Check if legacy batch mode is enabled
+      if (legacyBatchModeToggle && legacyBatchModeToggle.checked) {
+        // Legacy mode: just add to pending, don't trigger AI analysis
+        console.log(`📁 Added to pending (legacy batch mode): ${path.basename(filePath)}`);
+      } else {
+        // New mode: trigger immediate AI analysis
+        triggerAIAnalysis(filePath);
+      }
     }
   });
 }
@@ -383,8 +397,16 @@ function handleStartSorting() {
     updateStatus('No valid files selected. Please add files first.', 'error');
     return;
   }
-    
-  updateStatus(`Starting to process ${validPaths.length} file(s)...`, 'info');
+  
+  // Check if we're in legacy batch mode
+  const isLegacyMode = legacyBatchModeToggle && legacyBatchModeToggle.checked;
+  
+  if (isLegacyMode) {
+    updateStatus(`Starting legacy batch processing of ${validPaths.length} file(s)...`, 'info');
+  } else {
+    updateStatus(`⚠️ Legacy batch mode is disabled. Files are processed automatically on upload.`, 'warning');
+    return;
+  }
     
   // Mark all as pending in UI
   document.querySelectorAll('#fileListItems .file-item .file-status').forEach((el) => {
@@ -517,6 +539,23 @@ function updatePreviewTable() {
     // Generate tables display
     const tablesDisplay = generateTablesDisplay(metadata.tables);
     
+    // Enhanced status display with loading states
+    let statusContent = getStatusText(metadata.status);
+    if (metadata.analyzing && metadata.loadingStep !== undefined) {
+      const loadingSteps = [
+        'Extracting text...',
+        'Analyzing content...',
+        'Generating suggestions...'
+      ];
+      const currentStep = loadingSteps[metadata.loadingStep] || 'Analyzing...';
+      statusContent = `
+        <div class="loading-status">
+          <span class="loading-spinner"></span>
+          <span>${currentStep}</span>
+        </div>
+      `;
+    }
+    
     row.innerHTML = `
       <td title="${filePath}">${fileName}</td>
       <td>${metadata.clientName}</td>
@@ -527,7 +566,7 @@ function updatePreviewTable() {
       <td>${tablesDisplay}</td>
       <td>${snippetsDisplay}</td>
       <td>${metadata.proposedFilename}</td>
-      <td><span class="file-status ${metadata.status}">${getStatusText(metadata.status)}</span></td>
+      <td><span class="file-status ${metadata.status}">${statusContent}</span></td>
     `;
     
     previewTableBody.appendChild(row);
@@ -651,52 +690,165 @@ function generateProposedFilename(analysis) {
   return parts.join('_') + '.pdf';
 }
 
-function analyzeFileMetadata(filePath) {
-  // Update status to processing
+// New AI analysis trigger function that combines metadata + AI suggestions
+async function triggerAIAnalysis(filePath) {
+  console.log(`🤖 Starting AI analysis for: ${path.basename(filePath)}`);
+  
+  // Update UI to show analyzing state with enhanced loading
+  updateFileStatus(filePath, 'Analyzing...', 'processing');
+  
+  // Initialize metadata with loading state
   const metadata = fileMetadata.get(filePath) || {};
   metadata.status = 'processing';
+  metadata.analyzing = true;
+  metadata.loadingStep = 0;
+  metadata.analysisStartTime = Date.now();
   fileMetadata.set(filePath, metadata);
   updatePreviewTable();
   
-  // Send to main process for analysis
-  if (window.electronAPI && window.electronAPI.analyzeFile) {
-    window.electronAPI.analyzeFile(filePath)
-      .then(result => {
-        const updatedMetadata = {
-          clientName: result.clientName || 'Unknown',
-          date: result.date || 'Unknown',
-          documentType: result.documentType || 'Unknown',
-          proposedFilename: result.proposedFilename || 'Unknown',
-          status: 'success'
-        };
-        fileMetadata.set(filePath, updatedMetadata);
-        updatePreviewTable();
-      })
-      .catch(error => {
-        console.error('Error analyzing file:', error);
-        const errorMetadata = {
-          clientName: 'Error',
-          date: 'Error',
-          documentType: 'Error',
-          proposedFilename: 'Error',
-          status: 'error'
-        };
-        fileMetadata.set(filePath, errorMetadata);
-        updatePreviewTable();
-      });
-  } else {
-    // Fallback: simulate analysis
-    setTimeout(() => {
-      const simulatedMetadata = {
-        clientName: 'Sample Client',
-        date: new Date().toISOString().split('T')[0],
-        documentType: 'Document',
-        proposedFilename: `Sample_Client_${new Date().toISOString().split('T')[0]}_Document.pdf`,
-        status: 'success'
-      };
-      fileMetadata.set(filePath, simulatedMetadata);
+  // Start loading step animation
+  const loadingSteps = [
+    'Extracting text...',
+    'Analyzing content...',
+    'Generating suggestions...'
+  ];
+  
+  const loadingInterval = setInterval(() => {
+    const currentMetadata = fileMetadata.get(filePath);
+    if (currentMetadata && currentMetadata.analyzing) {
+      currentMetadata.loadingStep = (currentMetadata.loadingStep + 1) % loadingSteps.length;
+      fileMetadata.set(filePath, currentMetadata);
       updatePreviewTable();
-    }, 1000);
+    } else {
+      clearInterval(loadingInterval);
+    }
+  }, 1500);
+  
+  try {
+    // Step 1: Get basic metadata (fast, synchronous)
+    const basicMetadata = await getBasicFileMetadata(filePath);
+    
+    // Step 2: Get AI analysis and suggestions
+    const aiResult = await window.electronAPI.analyzeFile(filePath);
+    
+    if (aiResult.success) {
+      clearInterval(loadingInterval);
+      
+      // Merge basic metadata with AI results
+      const updatedMetadata = {
+        ...basicMetadata,
+        ...aiResult.analysis,
+        status: 'success',
+        analyzing: false,
+        loadingStep: 0,
+        analysisTime: Date.now() - metadata.analysisStartTime,
+        aiSuggestions: aiResult.analysis?.suggestions || [],
+        confidence: aiResult.analysis?.confidence || 0,
+        source: aiResult.analysis?.source || 'ai'
+      };
+      
+      fileMetadata.set(filePath, updatedMetadata);
+      updateFileStatus(filePath, 'Ready', 'success');
+      updatePreviewTable();
+      
+      console.log(`✅ AI analysis completed for: ${path.basename(filePath)} (${updatedMetadata.analysisTime}ms)`);
+      
+      // Show AI suggestions modal
+      showAISuggestionsModal(filePath, updatedMetadata);
+    } else {
+      throw new Error(aiResult.error || 'AI analysis failed');
+    }
+  } catch (error) {
+    clearInterval(loadingInterval);
+    console.error(`❌ AI analysis failed for ${path.basename(filePath)}:`, error);
+    
+    // Update with error state
+    const errorMetadata = {
+      clientName: 'Analysis Failed',
+      date: 'Unknown',
+      documentType: 'Unknown',
+      proposedFilename: 'Manual_Rename_Required.pdf',
+      status: 'error',
+      analyzing: false,
+      loadingStep: 0,
+      error: error.message,
+      analysisTime: Date.now() - metadata.analysisStartTime
+    };
+    
+    fileMetadata.set(filePath, errorMetadata);
+    updateFileStatus(filePath, 'Failed - Click to retry', 'error');
+    updatePreviewTable();
+    
+    // Show error modal with manual input option
+    showAISuggestionsModal(filePath, errorMetadata, true);
+  }
+}
+
+// Helper function to get basic file metadata
+async function getBasicFileMetadata(filePath) {
+  try {
+    const stats = await window.electronAPI.getFileStats(filePath);
+    return {
+      clientName: 'Analyzing...',
+      date: 'Analyzing...',
+      documentType: 'Analyzing...',
+      proposedFilename: 'Analyzing...',
+      fileSize: stats.size,
+      created: stats.created,
+      modified: stats.modified
+    };
+  } catch (error) {
+    console.warn('Could not get file stats:', error);
+    return {
+      clientName: 'Unknown',
+      date: 'Unknown',
+      documentType: 'Unknown',
+      proposedFilename: 'Unknown'
+    };
+  }
+}
+
+// Helper function to update file status in UI
+function updateFileStatus(filePath, statusText, statusType) {
+  const listItem = document.querySelector(`#fileListItems .file-item[data-path="${CSS.escape(filePath)}"]`);
+  if (listItem) {
+    const statusEl = listItem.querySelector('.file-status');
+    const actionsEl = listItem.querySelector('.file-actions');
+    
+    if (statusEl) {
+      statusEl.textContent = statusText;
+      statusEl.className = `file-status ${statusType}`;
+    }
+    
+    if (actionsEl) {
+      if (statusType === 'success') {
+        actionsEl.style.display = 'inline-block';
+      } else if (statusType === 'error') {
+        actionsEl.style.display = 'inline-block';
+        actionsEl.querySelector('.retry-btn').style.display = 'inline-block';
+        actionsEl.querySelector('.view-suggestions-btn').style.display = 'none';
+      } else {
+        actionsEl.style.display = 'none';
+      }
+    }
+  }
+}
+
+// Retry analysis function
+async function retryAnalysis(filePath) {
+  console.log(`🔄 Retrying analysis for: ${path.basename(filePath)}`);
+  await triggerAIAnalysis(filePath);
+}
+
+// View AI suggestions function
+async function viewAISuggestions(filePath) {
+  const metadata = fileMetadata.get(filePath);
+  if (metadata && metadata.aiSuggestions && metadata.aiSuggestions.length > 0) {
+    showSuggestionsModal(metadata.aiSuggestions, filePath);
+  } else {
+    // If no suggestions available, trigger new analysis
+    updateStatus('No suggestions available. Running new analysis...', 'info');
+    await triggerAIAnalysis(filePath);
   }
 }
 
@@ -762,6 +914,9 @@ async function loadSettings() {
       useOCRToggle.checked = extractionConfig.useOCR || false;
       useTableExtractionToggle.checked = extractionConfig.useTableExtraction || false;
       useLLMEnhancerToggle.checked = extractionConfig.useLLMEnhancer !== false; // Default to true
+      if (legacyBatchModeToggle) {
+        legacyBatchModeToggle.checked = extractionConfig.legacyBatchMode || false;
+      }
     }
     
     // Load processing statistics
@@ -803,7 +958,8 @@ async function saveSettings() {
     const extractionConfig = {
       useOCR: useOCRToggle.checked,
       useTableExtraction: useTableExtractionToggle.checked,
-      useLLMEnhancer: useLLMEnhancerToggle.checked
+      useLLMEnhancer: useLLMEnhancerToggle.checked,
+      legacyBatchMode: legacyBatchModeToggle ? legacyBatchModeToggle.checked : false
     };
     
     const extractionResult = await window.electronAPI.updateExtractionConfig(extractionConfig);
@@ -882,6 +1038,9 @@ async function handleAISuggest() {
   // Show loading modal with progress simulation
   showLoadingModal('Analyzing Document', 'Please wait while we analyze your document...', 0);
   
+  // Update status with AI-specific message
+  updateStatus('Analyzing document content...', 'info');
+  
   // Simulate progress updates
   const progressInterval = setInterval(() => {
     const currentProgress = Math.min(90, Math.random() * 30 + 20); // Random progress between 20-90%
@@ -900,8 +1059,10 @@ async function handleAISuggest() {
     
     if (result.success) {
       if (result.suggestions && result.suggestions.length > 0) {
+        updateStatus('AI suggestions ready for review', 'success');
         showSuggestionsModal(result.suggestions, currentFilePath);
       } else {
+        updateStatus('No suggestions generated', 'warning');
         showErrorModal('No Suggestions', 'No suggestions generated. Please try again.', 'warning', {
           canRetry: true,
           retryCallback: () => handleAISuggest()
@@ -909,6 +1070,7 @@ async function handleAISuggest() {
       }
     } else {
       // Handle specific error cases with enhanced error modal
+      updateStatus('AI analysis failed', 'error');
       handleAIError(result);
     }
   } catch (error) {
@@ -1330,6 +1492,9 @@ async function loadSettings() {
       useOCRToggle.checked = extractionConfig.useOCR || false;
       useTableExtractionToggle.checked = extractionConfig.useTableExtraction || false;
       useLLMEnhancerToggle.checked = extractionConfig.useLLMEnhancer !== false; // Default to true
+      if (legacyBatchModeToggle) {
+        legacyBatchModeToggle.checked = extractionConfig.legacyBatchMode || false;
+      }
     }
     
     // Load processing statistics
@@ -1368,7 +1533,8 @@ async function handleSaveSettings() {
     const extractionConfig = {
       useOCR: useOCRToggle.checked,
       useTableExtraction: useTableExtractionToggle.checked,
-      useLLMEnhancer: useLLMEnhancerToggle.checked
+      useLLMEnhancer: useLLMEnhancerToggle.checked,
+      legacyBatchMode: legacyBatchModeToggle ? legacyBatchModeToggle.checked : false
     };
     
     const extractionResult = await window.electronAPI.updateExtractionConfig(extractionConfig);
@@ -1494,4 +1660,850 @@ async function exportTelemetry() {
     console.error('Error exporting telemetry:', error);
     updateStatus('Error exporting telemetry data', 'error');
   }
+}
+
+// AI Suggestions Modal Functions
+function showAISuggestionsModal(filePath, metadata, isError = false) {
+  // Create modal if it doesn't exist
+  let modal = document.getElementById('aiSuggestionsModal');
+  if (!modal) {
+    modal = createAISuggestionsModal();
+    document.body.appendChild(modal);
+  }
+  
+  // Populate modal with data
+  populateAISuggestionsModal(modal, filePath, metadata, isError);
+  
+  // Show modal
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  
+  // Focus on primary input
+  const primaryInput = modal.querySelector('.suggestion-input');
+  if (primaryInput) {
+    primaryInput.focus();
+    primaryInput.select();
+  }
+}
+
+function createAISuggestionsModal() {
+  const modal = document.createElement('div');
+  modal.id = 'aiSuggestionsModal';
+  modal.className = 'ai-suggestions-modal hidden';
+  
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="ai-icon">🤖</span>
+          AI Suggestions
+        </div>
+        <button class="modal-close" onclick="closeAISuggestionsModal()">&times;</button>
+      </div>
+      
+      <div class="file-info">
+        <div class="file-icon-large">📄</div>
+        <div class="file-details">
+          <h4 id="modalFileName">Loading...</h4>
+          <p id="modalFileSize">Loading...</p>
+        </div>
+      </div>
+      
+      <div class="suggestions-section">
+        <div class="section-title">Suggested Filename</div>
+        <div class="primary-suggestion">
+          <input type="text" class="suggestion-input" id="primarySuggestion" placeholder="Enter filename...">
+        </div>
+        
+        <div class="alternative-suggestions" id="alternativeSuggestions">
+          <!-- Alternatives will be populated here -->
+        </div>
+      </div>
+      
+      <div class="document-preview" id="documentPreview">
+        <!-- Document preview will be populated here -->
+      </div>
+      
+      <div class="metadata-display" id="metadataDisplay">
+        <!-- Metadata will be populated here -->
+      </div>
+      
+      <div class="modal-actions">
+        <div class="action-buttons">
+          <button class="btn-primary" id="acceptBtn" onclick="acceptSuggestion()">Accept</button>
+          <button class="btn-secondary" id="regenerateBtn" onclick="regenerateSuggestion()">Regenerate</button>
+          <button class="btn-outline" onclick="skipFile()">Skip</button>
+        </div>
+        
+        <div class="batch-actions" id="batchActions" style="display: none;">
+          <div class="batch-divider"></div>
+          <button class="btn-batch" id="batchAcceptBtn" onclick="batchAcceptAll()" title="Accept all ready suggestions and finalize filenames">
+            Batch Accept All
+          </button>
+        </div>
+        
+        <div class="batch-progress" id="batchProgress" style="display: none;">
+          <div class="progress-text" id="batchProgressText">Processing file 1 of 3...</div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="batchProgressFill"></div>
+          </div>
+        </div>
+        
+        <div class="quality-feedback" id="qualityFeedback" style="display: none;">
+          <span class="feedback-label">How was this suggestion?</span>
+          <div class="feedback-buttons">
+            <button class="feedback-btn thumbs-up" onclick="giveFeedback('good')">👍</button>
+            <button class="feedback-btn thumbs-down" onclick="giveFeedback('bad')">👎</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="error-state" id="errorState" style="display: none;">
+        <div class="error-icon">⚠️</div>
+        <p>AI analysis failed. Please enter a filename manually.</p>
+        <div class="manual-input">
+          <input type="text" id="manualInput" placeholder="Enter filename manually...">
+          <button class="btn-primary" onclick="acceptManualInput()">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Add keyboard event listeners
+  modal.addEventListener('keydown', handleModalKeyboard);
+  
+  return modal;
+}
+
+function populateAISuggestionsModal(modal, filePath, metadata, isError) {
+  const fileName = path.basename(filePath);
+  const fileSize = metadata.fileSize ? formatFileSize(metadata.fileSize) : 'Unknown size';
+  
+  // Update file info
+  modal.querySelector('#modalFileName').textContent = fileName;
+  modal.querySelector('#modalFileSize').textContent = fileSize;
+  
+  // Initialize regeneration counter for new file analysis
+  if (!metadata.regenCount) {
+    metadata.regenCount = 0;
+    fileMetadata.set(filePath, metadata);
+  }
+  
+  if (isError) {
+    // Show error state
+    modal.querySelector('#errorState').style.display = 'block';
+    modal.querySelector('.suggestions-section').style.display = 'none';
+    modal.querySelector('.document-preview').style.display = 'none';
+    modal.querySelector('.metadata-display').style.display = 'none';
+    modal.querySelector('.action-buttons').style.display = 'none';
+    
+    // Focus on manual input
+    const manualInput = modal.querySelector('#manualInput');
+    if (manualInput) {
+      manualInput.focus();
+    }
+  } else {
+    // Show normal state
+    modal.querySelector('#errorState').style.display = 'none';
+    modal.querySelector('.suggestions-section').style.display = 'block';
+    modal.querySelector('.document-preview').style.display = 'block';
+    modal.querySelector('.metadata-display').style.display = 'block';
+    modal.querySelector('.action-buttons').style.display = 'flex';
+    
+    // Set primary suggestion
+    const primaryInput = modal.querySelector('#primarySuggestion');
+    primaryInput.value = metadata.proposedFilename || 'Untitled.pdf';
+    
+    // Populate alternatives
+    populateAlternatives(modal, metadata.alternatives || []);
+    
+    // Populate document preview
+    populateDocumentPreview(modal, metadata.documentPreview || '');
+    
+    // Populate metadata
+    populateMetadata(modal, metadata);
+    
+    // Update regenerate button UI with current count
+    updateRegenerateButtonUI(modal, metadata.regenCount);
+    
+    // Check if batch accept should be shown
+    updateBatchAcceptVisibility(modal);
+  }
+  
+  // Store current file path for actions
+  modal.dataset.filePath = filePath;
+}
+
+function populateAlternatives(modal, alternatives) {
+  const container = modal.querySelector('#alternativeSuggestions');
+  container.innerHTML = '';
+  
+  if (alternatives.length === 0) {
+    // Generate some basic alternatives
+    const primary = modal.querySelector('#primarySuggestion').value;
+    const baseName = primary.replace(/\.[^/.]+$/, '');
+    const ext = path.extname(primary);
+    
+    alternatives = [
+      `${baseName}_v1${ext}`,
+      `${baseName}_final${ext}`,
+      `${baseName}_draft${ext}`
+    ];
+  }
+  
+  alternatives.slice(0, 4).forEach((alt, index) => {
+    const div = document.createElement('div');
+    div.className = 'alternative-suggestion';
+    div.textContent = alt;
+    div.onclick = () => selectAlternative(alt);
+    container.appendChild(div);
+  });
+}
+
+function populateDocumentPreview(modal, preview) {
+  const container = modal.querySelector('#documentPreview');
+  if (preview && preview.trim()) {
+    container.textContent = preview.substring(0, 200) + (preview.length > 200 ? '...' : '');
+  } else {
+    container.textContent = 'No preview available';
+  }
+}
+
+function populateMetadata(modal, metadata) {
+  const container = modal.querySelector('#metadataDisplay');
+  container.innerHTML = '';
+  
+  const metadataItems = [
+    { label: 'Document Type', value: metadata.documentType || 'Unknown' },
+    { label: 'Client', value: metadata.clientName || 'Unknown' },
+    { label: 'Date', value: metadata.date || 'Unknown' },
+    { label: 'Confidence', value: getConfidenceLabel(metadata.confidence) }
+  ];
+  
+  metadataItems.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'metadata-item';
+    div.innerHTML = `
+      <div class="metadata-label">${item.label}</div>
+      <div class="metadata-value">${item.value}</div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function getConfidenceLabel(confidence) {
+  if (typeof confidence === 'number') {
+    if (confidence >= 0.8) return 'High';
+    if (confidence >= 0.6) return 'Medium';
+    return 'Low';
+  }
+  return confidence || 'Medium';
+}
+
+function selectAlternative(filename) {
+  const modal = document.getElementById('aiSuggestionsModal');
+  const primaryInput = modal.querySelector('#primarySuggestion');
+  primaryInput.value = filename;
+  
+  // Update visual selection
+  modal.querySelectorAll('.alternative-suggestion').forEach(el => {
+    el.classList.remove('selected');
+  });
+  event.target.classList.add('selected');
+}
+
+function closeAISuggestionsModal() {
+  const modal = document.getElementById('aiSuggestionsModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+    
+    // Clear any intervals
+    if (window.modalLoadingInterval) {
+      clearInterval(window.modalLoadingInterval);
+    }
+  }
+}
+
+async function acceptSuggestion() {
+  const modal = document.getElementById('aiSuggestionsModal');
+  const filePath = modal.dataset.filePath;
+  const filename = modal.querySelector('#primarySuggestion').value;
+  
+  if (!filename.trim()) {
+    alert('Please enter a filename');
+    return;
+  }
+  
+  // Track time to decision
+  const startTime = Date.now();
+  
+  // Disable buttons during processing
+  const acceptBtn = modal.querySelector('#acceptBtn');
+  const regenerateBtn = modal.querySelector('#regenerateBtn');
+  const skipBtn = modal.querySelector('.btn-outline');
+  
+  acceptBtn.disabled = true;
+  acceptBtn.textContent = 'Processing...';
+  regenerateBtn.disabled = true;
+  skipBtn.disabled = true;
+  
+  try {
+    // Get file metadata for enhanced logging
+    const metadata = fileMetadata.get(filePath);
+    const documentType = metadata?.analysis?.documentType || null;
+    const confidence = metadata?.analysis?.confidence || null;
+    const documentHash = metadata?.analysis?.documentHash || null;
+    
+    // Prepare options for enhanced file operations
+    const options = {
+      source: 'ai',
+      metadata: metadata?.analysis || {},
+      confidence: confidence,
+      documentType: documentType,
+      documentHash: documentHash
+    };
+    
+    // Call the enhanced file:rename handler
+    const result = await window.electronAPI.renameFile(filePath, filename, options);
+    
+    if (result.success) {
+      // Calculate time to decision
+      const timeToDecision = Date.now() - startTime;
+      
+      // Update the UI to reflect the new filename
+      updateFileListAfterRename(filePath, result.newPath);
+      
+      // Log acceptance with quality feedback and timing
+      logSuggestionAction(filePath, 'accepted', filename, {
+        timeToDecisionMs: timeToDecision,
+        confidence: confidence,
+        documentType: documentType,
+        targetDir: result.targetDir,
+        sanitized: result.sanitized,
+        durationMs: result.durationMs
+      });
+      
+      // Update file metadata
+      if (metadata) {
+        metadata.proposedFilename = filename;
+        metadata.status = 'accepted';
+        metadata.finalPath = result.newPath;
+        metadata.targetDir = result.targetDir;
+        fileMetadata.set(filePath, metadata);
+        updatePreviewTable();
+      }
+      
+      // Show success message
+      updateStatus(`✅ File renamed to: ${filename}`, 'success');
+      
+      // Show quality feedback
+      modal.querySelector('#qualityFeedback').style.display = 'flex';
+      modal.querySelector('.action-buttons').style.display = 'none';
+      
+      // Close modal after a short delay
+      setTimeout(() => {
+        closeAISuggestionsModal();
+      }, 1000);
+      
+    } else {
+      // Handle rename failure
+      throw new Error(result.error || 'Failed to rename file');
+    }
+  } catch (error) {
+    console.error('Error applying rename:', error);
+    
+    // Re-enable buttons
+    acceptBtn.disabled = false;
+    acceptBtn.textContent = 'Accept';
+    regenerateBtn.disabled = false;
+    skipBtn.disabled = false;
+    
+    // Show error message with fallback options
+    const errorMessage = `Error renaming file: ${error.message}`;
+    updateStatus(errorMessage, 'error');
+    
+    // Show error in modal with manual input option
+    modal.querySelector('#errorState').style.display = 'block';
+    modal.querySelector('.suggestions-section').style.display = 'none';
+    modal.querySelector('.action-buttons').style.display = 'none';
+    
+    // Pre-fill manual input with the suggested name
+    const manualInput = modal.querySelector('#manualInput');
+    if (manualInput) {
+      manualInput.value = filename;
+      manualInput.focus();
+    }
+  }
+}
+
+function regenerateSuggestion() {
+  const modal = document.getElementById('aiSuggestionsModal');
+  const filePath = modal.dataset.filePath;
+  
+  // Get current regeneration count
+  const metadata = fileMetadata.get(filePath);
+  if (!metadata) {
+    console.error('No metadata found for file:', filePath);
+    return;
+  }
+  
+  const regenCount = metadata.regenCount || 0;
+  
+  // Check if limit reached
+  if (regenCount >= 3) {
+    console.warn('Maximum regeneration attempts reached for file:', filePath);
+    return;
+  }
+  
+  // Increment regeneration count immediately (count all attempts)
+  metadata.regenCount = regenCount + 1;
+  fileMetadata.set(filePath, metadata);
+  
+  // Update button UI
+  updateRegenerateButtonUI(modal, metadata.regenCount);
+  
+  // Show loading state
+  const regenerateBtn = modal.querySelector('#regenerateBtn');
+  const originalText = regenerateBtn.textContent;
+  regenerateBtn.textContent = 'Regenerating...';
+  regenerateBtn.disabled = true;
+  
+  // Call regeneration API
+  if (window.electronAPI && window.electronAPI.regenerateSuggestion) {
+    window.electronAPI.regenerateSuggestion(filePath, modal.querySelector('#primarySuggestion').value)
+      .then(result => {
+        if (result.success) {
+          // Update with new suggestion
+          modal.querySelector('#primarySuggestion').value = result.suggestion;
+          populateAlternatives(modal, result.alternatives || []);
+          
+          // Log regeneration with count
+          logSuggestionAction(filePath, 'regenerated', result.suggestion, {
+            regenerationCount: metadata.regenCount
+          });
+          
+          // Show success feedback
+          updateStatus(`✅ New suggestion generated (attempt ${metadata.regenCount}/3)`, 'success');
+        } else {
+          // Show error but don't reset counter (already incremented)
+          const errorMessage = `Regeneration failed: ${result.error || 'Unknown error'}. You can try again (attempt ${metadata.regenCount}/3).`;
+          updateStatus(errorMessage, 'warning');
+        }
+      })
+      .catch(error => {
+        console.error('Regeneration error:', error);
+        const errorMessage = `Regeneration failed: ${error.message}. You can try again (attempt ${metadata.regenCount}/3).`;
+        updateStatus(errorMessage, 'warning');
+      })
+      .finally(() => {
+        // Update button UI with current count
+        updateRegenerateButtonUI(modal, metadata.regenCount);
+      });
+  } else {
+    alert('Regeneration not available');
+    updateRegenerateButtonUI(modal, metadata.regenCount);
+  }
+}
+
+function updateRegenerateButtonUI(modal, regenCount) {
+  const regenerateBtn = modal.querySelector('#regenerateBtn');
+  if (!regenerateBtn) return;
+  
+  const remaining = 3 - regenCount;
+  const disabled = regenCount >= 3;
+  
+  if (disabled) {
+    regenerateBtn.textContent = 'Max attempts reached';
+    regenerateBtn.disabled = true;
+    regenerateBtn.title = 'You\'ve reached the maximum of 3 regenerations for this file.';
+    regenerateBtn.style.opacity = '0.7';
+    
+    // Add warning icon if not already present
+    if (!regenerateBtn.querySelector('.warning-icon')) {
+      const warningIcon = document.createElement('span');
+      warningIcon.className = 'warning-icon';
+      warningIcon.textContent = ' ⚠️';
+      regenerateBtn.appendChild(warningIcon);
+    }
+  } else {
+    regenerateBtn.textContent = `Regenerate (${regenCount}/3)`;
+    regenerateBtn.disabled = false;
+    regenerateBtn.title = `${remaining} attempts remaining`;
+    regenerateBtn.style.opacity = '1';
+    
+    // Remove warning icon if present
+    const warningIcon = regenerateBtn.querySelector('.warning-icon');
+    if (warningIcon) {
+      warningIcon.remove();
+    }
+    
+    // Add subtle pulse animation on increment
+    regenerateBtn.style.animation = 'pulse 0.5s ease-in-out';
+    setTimeout(() => {
+      regenerateBtn.style.animation = '';
+    }, 500);
+  }
+}
+
+function updateBatchAcceptVisibility(modal) {
+  const batchActions = modal.querySelector('#batchActions');
+  if (!batchActions) return;
+  
+  // Count files that are analyzed and ready for user action
+  const readyFiles = Array.from(fileMetadata.entries()).filter(([filePath, metadata]) => {
+    return metadata.status === 'analyzed' || metadata.status === 'ready' || 
+           (metadata.proposedFilename && !metadata.status);
+  });
+  
+  // Show batch actions if there are 2 or more ready files
+  if (readyFiles.length >= 2) {
+    batchActions.style.display = 'flex';
+    const batchBtn = modal.querySelector('#batchAcceptBtn');
+    if (batchBtn) {
+      batchBtn.textContent = `Batch Accept All (${readyFiles.length})`;
+    }
+  } else {
+    batchActions.style.display = 'none';
+  }
+}
+
+async function batchAcceptAll() {
+  const modal = document.getElementById('aiSuggestionsModal');
+  if (!modal) return;
+  
+  // Get all files that are ready for acceptance
+  const readyFiles = Array.from(fileMetadata.entries()).filter(([filePath, metadata]) => {
+    return metadata.status === 'analyzed' || metadata.status === 'ready' || 
+           (metadata.proposedFilename && !metadata.status);
+  });
+  
+  if (readyFiles.length === 0) {
+    updateStatus('No files ready for batch acceptance', 'warning');
+    return;
+  }
+  
+  // Show progress UI
+  const batchProgress = modal.querySelector('#batchProgress');
+  const batchActions = modal.querySelector('#batchActions');
+  const actionButtons = modal.querySelector('.action-buttons');
+  
+  batchProgress.style.display = 'block';
+  batchActions.style.display = 'none';
+  actionButtons.style.display = 'none';
+  
+  // Disable modal interactions during batch processing
+  modal.style.pointerEvents = 'none';
+  
+  let successCount = 0;
+  let errorCount = 0;
+  const errors = [];
+  
+  // Prepare batch operations
+  const operations = readyFiles.map(([filePath, metadata]) => {
+    const documentType = metadata?.analysis?.documentType || null;
+    const confidence = metadata?.analysis?.confidence || null;
+    const documentHash = metadata?.analysis?.documentHash || null;
+    
+    return {
+      oldPath: filePath,
+      newName: metadata.proposedFilename,
+      source: 'ai',
+      metadata: metadata?.analysis || {},
+      confidence: confidence,
+      documentType: documentType,
+      documentHash: documentHash
+    };
+  });
+  
+  // Set up progress listener
+  window.electronAPI.onFileBatchProgress((event, progress) => {
+    const progressText = modal.querySelector('#batchProgressText');
+    const progressFill = modal.querySelector('#batchProgressFill');
+    
+    progressText.textContent = `Processing file ${progress.current} of ${progress.total}...`;
+    progressFill.style.width = `${(progress.current / progress.total) * 100}%`;
+    
+    updateStatus(`Processing file ${progress.current} of ${progress.total}...`, 'info');
+  });
+  
+  try {
+    // Call the enhanced batch file operations handler
+    const result = await window.electronAPI.batchRenameFiles(operations);
+    
+    if (result.success) {
+      // Process results
+      result.results.forEach((fileResult, index) => {
+        const [filePath, metadata] = readyFiles[index];
+        
+        if (fileResult.success) {
+          // Update the UI to reflect the new filename
+          updateFileListAfterRename(filePath, fileResult.newPath);
+          
+          // Log acceptance
+          logSuggestionAction(filePath, 'batch-accepted', metadata.proposedFilename, {
+            confidence: fileResult.confidence,
+            documentType: fileResult.documentType,
+            targetDir: fileResult.targetDir,
+            durationMs: fileResult.durationMs
+          });
+          
+          // Update file metadata
+          metadata.status = 'accepted';
+          metadata.finalPath = fileResult.newPath;
+          metadata.targetDir = fileResult.targetDir;
+          fileMetadata.set(filePath, metadata);
+          
+          successCount++;
+        } else {
+          console.error(`Error processing file ${filePath}:`, fileResult.error);
+          errors.push({ filePath, error: fileResult.error });
+          errorCount++;
+        }
+      });
+    } else {
+      throw new Error(result.error || 'Batch operations failed');
+    }
+    
+    // Show completion message
+    if (errorCount === 0) {
+      updateStatus(`✅ ${successCount} files successfully accepted`, 'success');
+      showSuccessToast(`✅ ${successCount} files successfully accepted`);
+    } else {
+      updateStatus(`⚠️ ${successCount} accepted, ${errorCount} failed`, 'warning');
+      showSuccessToast(`⚠️ ${successCount} accepted, ${errorCount} failed`);
+    }
+    
+    // Update preview table
+    updatePreviewTable();
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+      closeAISuggestionsModal();
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Batch processing error:', error);
+    updateStatus('Batch processing failed', 'error');
+  } finally {
+    // Re-enable modal interactions
+    modal.style.pointerEvents = 'auto';
+    batchProgress.style.display = 'none';
+    batchActions.style.display = 'flex';
+    actionButtons.style.display = 'flex';
+  }
+}
+
+function showSuccessToast(message) {
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.className = 'success-toast';
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #4CAF50;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease-out;
+  `;
+  
+  document.body.appendChild(toast);
+  
+  // Remove toast after 3 seconds
+  setTimeout(() => {
+    toast.style.animation = 'slideOutRight 0.3s ease-in';
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }, 3000);
+}
+
+function skipFile() {
+  const modal = document.getElementById('aiSuggestionsModal');
+  const filePath = modal.dataset.filePath;
+  
+  // Log skip
+  logSuggestionAction(filePath, 'skipped', null);
+  
+  // Update file metadata
+  const metadata = fileMetadata.get(filePath);
+  if (metadata) {
+    metadata.status = 'skipped';
+    fileMetadata.set(filePath, metadata);
+    updatePreviewTable();
+  }
+  
+  closeAISuggestionsModal();
+}
+
+async function acceptManualInput() {
+  const modal = document.getElementById('aiSuggestionsModal');
+  const filePath = modal.dataset.filePath;
+  const filename = modal.querySelector('#manualInput').value;
+  
+  if (!filename.trim()) {
+    alert('Please enter a filename');
+    return;
+  }
+  
+  // Disable buttons during processing
+  const saveBtn = modal.querySelector('#manualInput').nextElementSibling;
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Processing...';
+  
+  try {
+    // Call the main process to rename the file
+    const result = await window.electronAPI.renameFile(filePath, filename);
+    
+    if (result.success) {
+      // Update the UI to reflect the new filename
+      updateFileListAfterRename(filePath, result.newPath);
+      
+      // Log manual input
+      logSuggestionAction(filePath, 'manual', filename);
+      
+      // Update file metadata
+      const metadata = fileMetadata.get(filePath);
+      if (metadata) {
+        metadata.proposedFilename = filename;
+        metadata.status = 'manual';
+        fileMetadata.set(filePath, metadata);
+        updatePreviewTable();
+      }
+      
+      // Show success message
+      updateStatus(`✅ File renamed to: ${filename}`, 'success');
+      
+      // Close modal
+      closeAISuggestionsModal();
+      
+    } else {
+      // Handle rename failure
+      throw new Error(result.error || 'Failed to rename file');
+    }
+  } catch (error) {
+    console.error('Error applying manual rename:', error);
+    
+    // Re-enable button
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+    
+    // Show error message
+    const errorMessage = `Error renaming file: ${error.message}`;
+    updateStatus(errorMessage, 'error');
+    alert(errorMessage);
+  }
+}
+
+function giveFeedback(type) {
+  const modal = document.getElementById('aiSuggestionsModal');
+  const filePath = modal.dataset.filePath;
+  const filename = modal.querySelector('#primarySuggestion').value;
+  
+  // Log feedback
+  logSuggestionAction(filePath, 'feedback', filename, { feedback: type });
+  
+  // Update button states
+  modal.querySelectorAll('.feedback-btn').forEach(btn => {
+    btn.classList.remove('selected');
+  });
+  event.target.classList.add('selected');
+  
+  // Close modal after feedback
+  setTimeout(() => {
+    closeAISuggestionsModal();
+  }, 500);
+}
+
+function logSuggestionAction(filePath, action, filename, extra = {}) {
+  const logData = {
+    filePath,
+    action,
+    filename,
+    timestamp: new Date().toISOString(),
+    timeToDecisionMs: extra.timeToDecisionMs || 0,
+    qualityRating: extra.feedback || null,
+    regenerationCount: extra.regenerationCount || 0,
+    ...extra
+  };
+  
+  console.log('📊 Suggestion action logged:', logData);
+  
+  // Send to main process for logging
+  if (window.electronAPI && window.electronAPI.logSuggestionQuality) {
+    window.electronAPI.logSuggestionQuality(logData).catch(console.error);
+  }
+}
+
+function handleModalKeyboard(event) {
+  switch (event.key) {
+    case 'Enter':
+      if (event.target.classList.contains('suggestion-input') || event.target.classList.contains('manual-input')) {
+        event.preventDefault();
+        acceptSuggestion();
+      }
+      break;
+    case 'Escape':
+      event.preventDefault();
+      closeAISuggestionsModal();
+      break;
+    case 'Tab':
+      // Allow default tab behavior for accessibility
+      break;
+    case '1':
+      event.preventDefault();
+      acceptSuggestion();
+      break;
+    case '2':
+      event.preventDefault();
+      regenerateSuggestion();
+      break;
+    case '3':
+      event.preventDefault();
+      skipFile();
+      break;
+    case '4':
+      event.preventDefault();
+      const batchBtn = document.querySelector('#batchAcceptBtn');
+      if (batchBtn && batchBtn.style.display !== 'none') {
+        batchAcceptAll();
+      }
+      break;
+    default:
+      // Handle arrow keys for alternative navigation
+      if (event.key.startsWith('Arrow')) {
+        event.preventDefault();
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          navigateAlternatives(event.key);
+        }
+      }
+  }
+}
+
+function navigateAlternatives(direction) {
+  const modal = document.getElementById('aiSuggestionsModal');
+  const alternatives = modal.querySelectorAll('.alternative-suggestion');
+  const current = modal.querySelector('.alternative-suggestion.selected');
+  
+  if (alternatives.length === 0) return;
+  
+  let index = 0;
+  if (current) {
+    index = Array.from(alternatives).indexOf(current);
+  }
+  
+  if (direction === 'ArrowRight' || direction === 'ArrowDown') {
+    index = (index + 1) % alternatives.length;
+  } else if (direction === 'ArrowLeft' || direction === 'ArrowUp') {
+    index = (index - 1 + alternatives.length) % alternatives.length;
+  }
+  
+  alternatives[index].click();
 }

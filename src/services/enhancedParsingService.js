@@ -11,7 +11,9 @@ const TelemetryService = require('./telemetryService');
 const CanaryRolloutService = require('./canaryRolloutService');
 const RolloutMonitoringService = require('./rolloutMonitoringService');
 const BetaUserService = require('./betaUserService');
+const EnhancedPdfExtractor = require('./enhancedPdfExtractor');
 const { buildMetadataPrompt } = require('./ai_prompts');
+const path = require('path');
 
 /**
  * Enhanced Parsing Service with AI Integration
@@ -77,6 +79,14 @@ class EnhancedParsingService extends ParsingService {
       });
     }
     
+    // Initialize enhanced PDF extractor for robust PDF processing
+    this.enhancedPdfExtractor = new EnhancedPdfExtractor({
+      minTextLength: 50,
+      enablePoppler: true,
+      enablePdf2pic: true,
+      enableOcr: this.useOCR
+    });
+    
     // Initialize language detection service
     
     // Initialize handwriting service if enabled
@@ -141,35 +151,31 @@ class EnhancedParsingService extends ParsingService {
   }
 
   /**
-   * Enhanced text extraction with OCR fallback
+   * Enhanced text extraction with multiple fallback methods
    * @param {string} filePath - Path to the file
    * @returns {Promise<string>} Extracted text
    */
   async extractText(filePath) {
     try {
-      // First try standard text extraction
-      const text = await super.extractText(filePath);
+      const fileExtension = path.extname(filePath).toLowerCase();
       
-      // If text extraction returns empty or very short text, try OCR fallback
-      if (this.isFeatureEnabledForUser('useOCR') && this.ocrService && (!text || text.trim().length < 50)) {
-        console.log(`📷 PDF appears to be image-based, attempting OCR fallback for: ${filePath}`);
+      // For PDFs, use enhanced extractor with multiple fallback methods
+      if (fileExtension === '.pdf') {
+        console.log(`🔍 Using enhanced PDF extraction for: ${path.basename(filePath)}`);
+        const result = await this.enhancedPdfExtractor.extractText(filePath);
         
-        try {
-          const ocrResult = await this.ocrService.extractText(filePath);
-          if (ocrResult.success && ocrResult.text && ocrResult.text.trim().length > 0) {
-            console.log(`📷 OCR extraction successful: ${ocrResult.text.length} characters`);
-            return ocrResult.text;
-          } else {
-            console.log(`📷 OCR extraction failed or returned empty text for: ${filePath}`);
-            return text; // Return original text (empty or short)
-          }
-        } catch (ocrError) {
-          console.warn(`📷 OCR fallback failed for ${filePath}:`, ocrError.message);
-          return text; // Return original text on OCR failure
+        if (result.success && result.text) {
+          console.log(`✅ Enhanced PDF extraction succeeded: ${result.text.length} chars via ${result.method}`);
+          return result.text;
+        } else {
+          console.log(`⚠️ Enhanced PDF extraction failed, trying standard method`);
+          // Fall back to standard extraction
+          return await super.extractText(filePath);
         }
+      } else {
+        // For non-PDF files, use standard extraction
+        return await super.extractText(filePath);
       }
-      
-      return text;
     } catch (error) {
       console.error(`Text extraction failed for ${filePath}:`, error.message);
       throw error;
@@ -475,6 +481,20 @@ class EnhancedParsingService extends ParsingService {
         } catch (telemetryError) {
           console.warn('Telemetry tracking failed:', telemetryError.message);
         }
+      }
+      
+      // Generate improved filename using new filename generation service
+      try {
+        const { generateImprovedFilename } = require('./filenamePrompts');
+        const fileExtension = path.extname(filePath).toLowerCase();
+        const suggestedFilename = generateImprovedFilename(enhancedRegexResult, fileExtension, 100);
+        enhancedRegexResult.suggestedFilename = suggestedFilename;
+        console.log(`📝 Generated filename: ${suggestedFilename}`);
+      } catch (filenameError) {
+        console.warn(`Filename generation failed: ${filenameError.message}`);
+        // Fallback to basic filename generation
+        const fileExtension = path.extname(filePath).toLowerCase();
+        enhancedRegexResult.suggestedFilename = this.generateBasicFilename(enhancedRegexResult, fileExtension);
       }
       
       return enhancedRegexResult;
@@ -815,14 +835,22 @@ class EnhancedParsingService extends ParsingService {
         }
       }
       
-      // Process with AI
+      // Get file metadata for enhanced context
+      const fileMetadata = await this.getFileMetadata(filePath);
+      
+      // Get pre-extracted entities for enhanced context
+      const preExtractedEntities = this.extractPreEntities(text);
+      
+      // Process with AI using metadata extraction config and enhanced context
       const aiResult = await this.aiTextService.extractMetadataAI(text, {
         model: options.model,
-        temperature: options.temperature || 0.1,
-        maxTokens: options.maxTokens || 500,
+        temperature: options.temperature, // Will use config default if not specified
+        maxTokens: options.maxTokens, // Will use config default if not specified
         detectedLanguage: options.detectedLanguage,
         languageName: options.languageName,
-        forceRefresh: options.forceRefresh || false
+        forceRefresh: options.forceRefresh || false,
+        fileMetadata: fileMetadata,
+        preExtractedEntities: preExtractedEntities
       });
       
       if (aiResult) {
@@ -1373,6 +1401,102 @@ class EnhancedParsingService extends ParsingService {
   }
 
   /**
+   * Generate basic filename from metadata (fallback method)
+   * @param {Object} metadata - Document metadata
+   * @param {string} fileExtension - File extension
+   * @returns {string} Generated filename
+   */
+  generateBasicFilename(metadata, fileExtension) {
+    const parts = [];
+    
+    // Document type
+    let documentType = 'Unknown';
+    if (metadata.type && metadata.type.trim()) {
+      documentType = this.sanitizeComponent(metadata.type.trim());
+    }
+    parts.push(documentType);
+    
+    // Client name
+    let clientName = 'UnknownClient';
+    if (metadata.clientName && metadata.clientName.trim()) {
+      clientName = this.sanitizeComponent(metadata.clientName.trim());
+      // Truncate if too long
+      if (clientName.length > 30) {
+        clientName = clientName.substring(0, 30);
+      }
+    }
+    parts.push(clientName);
+    
+    // Date
+    if (metadata.date) {
+      parts.push(metadata.date);
+    } else {
+      parts.push('UnknownDate');
+    }
+    
+    // Build filename
+    let filename = parts.join('_') + fileExtension;
+    
+    // Truncate if too long
+    if (filename.length > 100) {
+      const baseLength = 100 - fileExtension.length - 1;
+      const truncated = parts.join('_').substring(0, baseLength);
+      filename = truncated + fileExtension;
+    }
+    
+    return filename;
+  }
+
+  /**
+   * Sanitize component for filename
+   * @param {string} component - Component to sanitize
+   * @returns {string} Sanitized component
+   */
+  sanitizeComponent(component) {
+    if (!component) return 'Unknown';
+    
+    return component
+      .replace(/[<>:"/\\|?*]/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .replace(/\b(Inc|Corp|LLC|Ltd|Incorporated|Corporation)\b/gi, '') // Remove common business suffixes
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .substring(0, 50); // Limit component length
+  }
+
+  /**
+   * Extract pre-entities using regex and keyword analysis for AI context
+   * @param {string} text - Document text
+   * @returns {Object} Pre-extracted entities
+   * @private
+   */
+  extractPreEntities(text) {
+    if (!text || text.trim().length === 0) {
+      return {
+        docType: null,
+        clientName: null,
+        date: null,
+        amount: null
+      };
+    }
+
+    // Use parent class methods for extraction
+    const docType = this.detectDocumentType(text);
+    const clientName = this.extractClientName(text);
+    const date = this.extractDate(text);
+    const amount = this.extractAmount(text);
+
+    return {
+      docType: docType || null,
+      clientName: clientName || null,
+      date: date || null,
+      amount: amount || null
+    };
+  }
+
+  /**
    * Shutdown method for test cleanup
    * @returns {Promise<void>}
    */
@@ -1382,6 +1506,8 @@ class EnhancedParsingService extends ParsingService {
       await this.close();
       
       // Close language service
+      if (this.languageService) {
+        await this.languageService.terminate();
       }
       
       // Close handwriting service

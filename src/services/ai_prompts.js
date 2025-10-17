@@ -7,6 +7,70 @@
  */
 
 /**
+ * Build enhanced context with file metadata and pre-extracted entities
+ * @param {string} text - Document text
+ * @param {Object} fileMetadata - File metadata (created, modified, size, name, mimeType)
+ * @param {Object} preExtractedEntities - Pre-extracted entities (docType, clientName, date, amount)
+ * @param {Object} options - Context enhancement options
+ * @returns {string} Enhanced context string
+ */
+function buildEnhancedContext(text, fileMetadata = null, preExtractedEntities = null, options = {}) {
+  const { includeFileMetadata = true, includePreExtractedEntities = true, maxTextLength = 6000 } = options;
+  
+  // Calculate space needed for metadata and entities (approximate)
+  const metadataSpace = includeFileMetadata && fileMetadata ? 200 : 0;
+  const entitiesSpace = includePreExtractedEntities && preExtractedEntities ? 150 : 0;
+  const headerSpace = 50; // "DOCUMENT CONTENT:" etc.
+  
+  const availableTextSpace = maxTextLength - metadataSpace - entitiesSpace - headerSpace;
+  const truncatedText = text.length > availableTextSpace 
+    ? text.substring(0, availableTextSpace) + '\n\n[Text truncated...]'
+    : text;
+  
+  let context = `DOCUMENT CONTENT:\n${truncatedText}`;
+  
+  // Add file metadata context
+  if (includeFileMetadata && fileMetadata) {
+    context += `\n\nFILE METADATA:\n`;
+    if (fileMetadata.created) {
+      context += `- Created: ${fileMetadata.created}\n`;
+    }
+    if (fileMetadata.modified) {
+      context += `- Modified: ${fileMetadata.modified}\n`;
+    }
+    if (fileMetadata.size) {
+      const sizeKB = Math.round(fileMetadata.size / 1024);
+      context += `- File size: ${sizeKB} KB\n`;
+    }
+    if (fileMetadata.name) {
+      context += `- Original filename: ${fileMetadata.name}\n`;
+    }
+    if (fileMetadata.mimeType) {
+      context += `- MIME type: ${fileMetadata.mimeType}\n`;
+    }
+  }
+  
+  // Add pre-extracted entities context
+  if (includePreExtractedEntities && preExtractedEntities) {
+    context += `\n\nPRE-EXTRACTED ENTITIES:\n`;
+    if (preExtractedEntities.docType) {
+      context += `- Document type: ${preExtractedEntities.docType}\n`;
+    }
+    if (preExtractedEntities.clientName) {
+      context += `- Client name: ${preExtractedEntities.clientName}\n`;
+    }
+    if (preExtractedEntities.date) {
+      context += `- Date: ${preExtractedEntities.date}\n`;
+    }
+    if (preExtractedEntities.amount) {
+      context += `- Amount: ${preExtractedEntities.amount}\n`;
+    }
+  }
+  
+  return context;
+}
+
+/**
  * Build a metadata extraction prompt for a single document
  * @param {string} text - Raw extracted text from document
  * @param {Object} options - Optional configuration
@@ -17,23 +81,31 @@
  */
 function buildMetadataPrompt(text, options = {}) {
   const {
-    model = 'gpt-3.5-turbo',
+    model = 'gpt-4-turbo',
     includeExamples = true,
-    maxTokens = 1000,
-    
-    
+    maxTokens = 250,
+    temperature = 0.25,
     hasTableData = false,
-    tableContext = null
+    tableContext = null,
+    fileMetadata = null,
+    preExtractedEntities = null,
+    contextEnhancement = {}
   } = options;
 
   // Truncate text if too long (leave room for prompt and response)
-  const maxTextLength = 3000;
+  // Use configurable maxTextLength from context enhancement config
+  const maxTextLength = options.maxTextLength || contextEnhancement.maxTextLength || 6000;
   const truncatedText = text.length > maxTextLength 
     ? text.substring(0, maxTextLength) + '\n\n[Text truncated...]'
     : text;
 
   const systemPrompt = buildSystemPrompt(model, includeExamples, hasTableData, tableContext);
-  const userPrompt = buildUserPrompt(truncatedText, hasTableData, tableContext);
+  const userPrompt = buildEnhancedContext(
+    truncatedText, 
+    fileMetadata, 
+    preExtractedEntities, 
+    contextEnhancement
+  );
 
   return {
     messages: [
@@ -47,7 +119,7 @@ function buildMetadataPrompt(text, options = {}) {
       }
     ],
     maxTokens,
-    temperature: 0.1, // Low temperature for consistent JSON output
+    temperature, // Use configurable temperature
     model
   };
 }
@@ -215,18 +287,22 @@ ${text}`;
  */
 function buildBatchMetadataPrompt(items, options = {}) {
   const {
-    model = 'gpt-3.5-turbo',
+    model = 'gpt-4-turbo',
     includeExamples = false, // Skip examples for batch to save tokens
-    maxTokens = 2000
+    maxTokens = 500,
+    temperature = 0.25,
+    contextEnhancement = {}
   } = options;
 
   // Filter out empty items and truncate text
+  // Use configurable maxTextLength from context enhancement config
+  const maxTextLength = options.maxTextLength || contextEnhancement.maxTextLength || 2000; // Higher limit for batch processing
   const validItems = items
     .filter(item => item.text && item.text.trim().length > 0)
     .map(item => ({
       ...item,
-      text: item.text.length > 1000 
-        ? item.text.substring(0, 1000) + '\n\n[Text truncated...]'
+      text: item.text.length > maxTextLength 
+        ? item.text.substring(0, maxTextLength) + '\n\n[Text truncated...]'
         : item.text
     }));
 
@@ -249,7 +325,7 @@ function buildBatchMetadataPrompt(items, options = {}) {
       }
     ],
     maxTokens,
-    temperature: 0.1,
+    temperature, // Use configurable temperature
     model
   };
 }
@@ -382,6 +458,7 @@ function getPromptStats() {
 module.exports = {
   buildMetadataPrompt,
   buildBatchMetadataPrompt,
+  buildEnhancedContext,
   validateResponse,
   getPromptStats
 };
